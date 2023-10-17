@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>ploigos_step_runner.step_implementers.push_container_image.skopeo API documentation</title>
 <meta name="description" content="`StepImplementer` for the `push-container-image` step using Skopeo …" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -42,43 +42,77 @@ Could come from:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>destination-url</code></td>
+<td><code>[container-image-pull-registry-type,
+container-image-registry-type]</code></td>
 <td>Yes</td>
-<td></td>
-<td>Container image repository destination to push image
-to. o not include the <code>docker://</code> prefix as it will
-automatically be applied</td>
+<td>'containers-storage:'</td>
+<td>Container repository type for the pull image source.
+See <a href="https://github.com/containers/skopeo">https://github.com/containers/skopeo</a> for valid options.</td>
 </tr>
 <tr>
-<td><code>src-tls-verify</code></td>
+<td>`[container-image-pull-address,
+container-image-build-address],</td>
 <td>Yes</td>
-<td><code>'true'</code></td>
-<td>Whether to very TLS for source of image</td>
+<td></td>
+<td>Address of image to push to the push destination.</td>
+</tr>
+<tr>
+<td><code>[source-tls,verify, src-tls-verify]</code></td>
+<td>Yes</td>
+<td><code>True</code></td>
+<td>Whether to verify TLS when pulling source image.</td>
+</tr>
+<tr>
+<td><code>[container-image-push-registry-type,
+container-image-registry-type]</code></td>
+<td>Yes</td>
+<td>'docker://'</td>
+<td>Container repository type for the push image source.
+See <a href="https://github.com/containers/skopeo">https://github.com/containers/skopeo</a> for valid options.</td>
+</tr>
+<tr>
+<td><code>[container-image-push-registry,
+destination-url]</code></td>
+<td>Yes</td>
+<td></td>
+<td>Container image repository destination to push image to. <br/>
+Should not include the repository type.</td>
+</tr>
+<tr>
+<td><code>[container-image-push-repository,
+container-image-repository]</code></td>
+<td>Yes</td>
+<td></td>
+<td>Container image repository to push the container image to.</td>
+</tr>
+<tr>
+<td><code>[container-image-push-tag,
+container-image-tag,
+container-image-version]</code></td>
+<td>Yes</td>
+<td></td>
+<td>Container image tag to push the container image with.</td>
 </tr>
 <tr>
 <td><code>dest-tls-verify</code></td>
 <td>Yes</td>
-<td><code>'true'</code></td>
-<td>Whether to verify TLS for destination of image</td>
+<td><code>True</code></td>
+<td>Whether to verify TLS when pushing destination image.</td>
 </tr>
 <tr>
 <td><code>containers-config-auth-file</code></td>
-<td>Yes</td>
-<td><code>'~/.container-image-repo-auth.json'</code></td>
+<td>No</td>
+<td></td>
 <td>Path to the container registry authentication file
-to use for container registry authentication.</td>
+to use for container registry authentication.
+If one is not provided one will be created in the
+working directory using <code>container-registries</code>.</td>
 </tr>
 <tr>
-<td><code>container-image-version</code></td>
-<td>Yes</td>
+<td><code>container-registries</code></td>
+<td>False</td>
 <td></td>
-<td>Tag to push container image with</td>
-</tr>
-<tr>
-<td><code>image-tar-file</code></td>
-<td>Yes</td>
 <td></td>
-<td>Local tar file of container image to push</td>
 </tr>
 </tbody>
 </table>
@@ -93,37 +127,36 @@ to use for container registry authentication.</td>
 </thead>
 <tbody>
 <tr>
-<td><code>container-image-registry-uri</code></td>
-<td>URI to the image registry service.</td>
+<td><code>container-image-push-registry</code></td>
+<td>Container image registry image was pushed to.</td>
 </tr>
 <tr>
-<td><code>container-image-registry-organization</code></td>
-<td>Organization in the image registry to push the image to.</td>
+<td><code>container-image-push-repository</code></td>
+<td>Container image repository image was pushed to.</td>
 </tr>
 <tr>
-<td><code>container-image-repository</code></td>
-<td>Repository in the Organization in the image registry to
-push the image to.</td>
+<td><code>container-image-push-tag</code></td>
+<td>Container image tag image was pushed to.</td>
 </tr>
 <tr>
-<td><code>container-image-name</code></td>
-<td>Name of the image to push to the Image Repository.
-This is the same value as <code>container-image-repository</code> as
-these are always the same, but people refer to them
-differently in different cases, so providing both.</td>
+<td><code>container-image-push-digest</code></td>
+<td>Container image digest of pushed container image.</td>
 </tr>
 <tr>
-<td><code>container-image-version</code></td>
-<td>Version of the image to push.</td>
+<td><code>container-image-address-by-tag</code></td>
+<td>Pushed container image address by tag.</td>
 </tr>
 <tr>
-<td><code>container-image-tag</code></td>
-<td>Tag container image was pushed with. <br/>
-Takes the form of:
-"<code>container-image-registry-uri</code>
-/<code>container-image-registry-organization</code>
-/<code>container-image-repository</code>
-:<code>container-image-version</code>"</td>
+<td><code>container-image-short-address-by-tag</code></td>
+<td>Pushed container image short address (no registry) by tag.</td>
+</tr>
+<tr>
+<td><code>container-image-address-by-digest</code></td>
+<td>Pushed container image address by digest.</td>
+</tr>
+<tr>
+<td><code>container-image-short-address-by-digest</code></td>
+<td>Pushed container image short address (no registry) by digest.</td>
 </tr>
 </tbody>
 </table>
@@ -142,68 +175,78 @@ Could come from:
   * runtime configuration
   * previous step results
 
-Configuration Key | Required? | Default  | Description
-------------------|-----------|----------|-----------
-`destination-url` | Yes       |          | Container image repository destination to push image \
-                                           to. o not include the `docker://` prefix as it will \
-                                           automatically be applied
-`src-tls-verify`  | Yes       | `&#39;true&#39;` | Whether to very TLS for source of image
-`dest-tls-verify` | Yes       | `&#39;true&#39;` | Whether to verify TLS for destination of image
-`containers-config-auth-file` | Yes | `&#39;~/.container-image-repo-auth.json&#39;` | \
-                                           Path to the container registry authentication file \
-                                           to use for container registry authentication.
-`container-image-version`     | Yes |    | Tag to push container image with
-`image-tar-file`  | Yes       |          | Local tar file of container image to push
+Configuration Key                      | Required? | Default               | Description
+---------------------------------------|-----------|-----------------------|-----------
+`[container-image-pull-registry-type, \
+  container-image-registry-type]`      | Yes       | &#39;containers-storage:&#39; | Container repository type for the pull image source. \
+                                                                             See https://github.com/containers/skopeo for valid options.
+`[container-image-pull-address, \
+  container-image-build-address],      | Yes       |                       | Address of image to push to the push destination.
+`[source-tls,verify, src-tls-verify]`  | Yes       | `True`                | Whether to verify TLS when pulling source image.
+`[container-image-push-registry-type, \
+  container-image-registry-type]`      | Yes       | &#39;docker://&#39;           | Container repository type for the push image source. \
+                                                                             See https://github.com/containers/skopeo for valid options.
+`[container-image-push-registry, \
+  destination-url]`                    | Yes       |                       | Container image repository destination to push image to. &lt;br/&gt; \
+                                                                             Should not include the repository type.
+`[container-image-push-repository, \
+  container-image-repository]`         | Yes       |                       | Container image repository to push the container image to.
+`[container-image-push-tag, \
+  container-image-tag, \
+  container-image-version]`            | Yes       |                       | Container image tag to push the container image with.
+`dest-tls-verify`                      | Yes       | `True`                | Whether to verify TLS when pushing destination image.
+`containers-config-auth-file`          | No        |                       | Path to the container registry authentication file \
+                                                                             to use for container registry authentication. \
+                                                                             If one is not provided one will be created in the \
+                                                                             working directory using `container-registries`.
+`container-registries`                 | False     |         |             | Hash of container registries to authenticate with.
+
 
 Result Artifacts
 ----------------
 Results artifacts output by this step.
 
-Result Artifact Key                     | Description
-----------------------------------------|------------
-`container-image-registry-uri`          | URI to the image registry service.
-`container-image-registry-organization` | Organization in the image registry to push the image to.
-`container-image-repository`            | Repository in the Organization in the image registry to \
-                                          push the image to.
-`container-image-name`                  | Name of the image to push to the Image Repository. \
-                                          This is the same value as `container-image-repository` as\
-                                          these are always the same, but people refer to them \
-                                          differently in different cases, so providing both.
-`container-image-version`               | Version of the image to push.
-`container-image-tag`                   | Tag container image was pushed with. &lt;br/&gt;\
-                                          Takes the form of: \
-                                            &#34;`container-image-registry-uri`\
-                                                /`container-image-registry-organization`\
-                                                /`container-image-repository`\
-                                                :`container-image-version`&#34;
-&#34;&#34;&#34;
+Result Artifact Key                       | Description
+------------------------------------------|------------
+`container-image-push-registry`           | Container image registry image was pushed to.
+`container-image-push-repository`         | Container image repository image was pushed to.
+`container-image-push-tag`                | Container image tag image was pushed to.
+`container-image-push-digest`             | Container image digest of pushed container image.
+`container-image-address-by-tag`          | Pushed container image address by tag.
+`container-image-short-address-by-tag`    | Pushed container image short address (no registry) by tag.
+`container-image-address-by-digest`       | Pushed container image address by digest.
+`container-image-short-address-by-digest` | Pushed container image short address (no registry) by digest.
+&#34;&#34;&#34; # pylint: disable=line-too-long
+
 import os
 import sys
-from distutils import util
-from pathlib import Path
 
 import sh
-from ploigos_step_runner import StepImplementer, StepResult
-from ploigos_step_runner.utils.containers import container_registries_login
+from ploigos_step_runner.utils.strutils import strtobool
+from ploigos_step_runner.step_implementer import StepImplementer
+from ploigos_step_runner.results import StepResult
+from ploigos_step_runner.utils.containers import (container_registries_login,
+                                                  get_container_image_digest)
 
 DEFAULT_CONFIG = {
-    &#39;src-tls-verify&#39;: &#39;true&#39;,
-    &#39;dest-tls-verify&#39;: &#39;true&#39;,
-    &#39;containers-config-auth-file&#39;: os.path.join(Path.home(), &#39;.container-image-repo-auth.json&#39;)
+    &#39;src-tls-verify&#39;: True,
+    &#39;dest-tls-verify&#39;: True,
+    &#39;container-image-pull-registry-type&#39;: &#39;containers-storage:&#39;,
+    &#39;container-image-push-registry-type&#39;: &#39;docker://&#39;,
+    &#39;container-image-push-tag&#39;: &#39;latest&#39;
 }
 
 REQUIRED_CONFIG_OR_PREVIOUS_STEP_RESULT_ARTIFACT_KEYS = [
-    &#39;containers-config-auth-file&#39;,
-    &#39;destination-url&#39;,
-    &#39;src-tls-verify&#39;,
-    &#39;dest-tls-verify&#39;,
-    &#39;service-name&#39;,
-    &#39;application-name&#39;,
-    &#39;organization&#39;,
-    &#39;container-image-version&#39;,
-    &#39;image-tar-file&#39;
-]
+    [&#39;container-image-pull-registry-type&#39;, &#39;container-image-registry-type&#39;],
+    [&#39;container-image-pull-address&#39;, &#39;container-image-build-address&#39;],
+    [&#39;source-tls,verify&#39;, &#39;src-tls-verify&#39;],
 
+    [&#39;container-image-push-registry-type&#39;, &#39;container-image-registry-type&#39;],
+    [&#39;container-image-push-registry&#39;, &#39;destination-url&#39;],
+    [&#39;container-image-push-repository&#39;, &#39;container-image-repository&#39;],
+    [&#39;container-image-push-tag&#39;, &#39;container-image-tag&#39;, &#39;container-image-version&#39;],
+    &#39;dest-tls-verify&#39;
+]
 class Skopeo(StepImplementer):
     &#34;&#34;&#34;`StepImplementer` for the `push-container-image` step using Skopeo.
     &#34;&#34;&#34;
@@ -240,7 +283,7 @@ class Skopeo(StepImplementer):
         &#34;&#34;&#34;
         return REQUIRED_CONFIG_OR_PREVIOUS_STEP_RESULT_ARTIFACT_KEYS
 
-    def _run_step(self):
+    def _run_step(self): # pylint: disable=too-many-locals
         &#34;&#34;&#34;Runs the step implemented by this StepImplementer.
 
         Returns
@@ -250,56 +293,138 @@ class Skopeo(StepImplementer):
         &#34;&#34;&#34;
         step_result = StepResult.from_step_implementer(self)
 
-        image_version = self.get_value(&#39;container-image-version&#39;).lower()
-        application_name = self.get_value(&#39;application-name&#39;)
-        service_name = self.get_value(&#39;service-name&#39;)
-        organization = self.get_value(&#39;organization&#39;)
-        image_tar_file = self.get_value(&#39;image-tar-file&#39;)
-        destination_url = self.get_value(&#39;destination-url&#39;)
-        dest_tls_verify = self.get_value(&#39;dest-tls-verify&#39;)
+        # get src image config
+        pull_registry_type = self.get_value([
+            &#39;container-image-pull-registry-type&#39;,
+            &#39;container-image-registry-type&#39;
+        ])
+        container_image_pull_address = self.get_value([
+            &#39;container-image-pull-address&#39;,
+            &#39;container-image-build-address&#39;
+        ])
+        source_tls_verify = self.get_value([&#39;source-tls-verify&#39;, &#39;src-tls-verify&#39;])
+        if isinstance(source_tls_verify, str):
+            source_tls_verify = bool(strtobool(source_tls_verify))
 
-        image_registry_uri = destination_url
-        image_registry_organization = organization
-        image_repository = f&#34;{application_name}-{service_name}&#34;
-        image_tag = f&#34;{image_registry_uri}/{image_registry_organization}&#34; \
-                    f&#34;/{image_repository}:{image_version}&#34;
+        # create destination config
+        push_registry_type = self.get_value([
+            &#39;container-image-push-registry-type&#39;,
+            &#39;container-image-registry-type&#39;
+        ])
+        container_image_push_registry = self.get_value([
+            &#39;container-image-push-registry&#39;,
+            &#39;destination-url&#39;
+        ])
+        container_image_push_repository = self.get_value([
+            &#39;container-image-push-repository&#39;,
+            &#39;container-image-repository&#39;
+        ])
+        container_image_push_tag = self.get_value([
+            &#39;container-image-push-tag&#39;,
+            &#39;container-image-tag&#39;,
+            &#39;container-image-version&#39;
+        ])
+        dest_tls_verify = self.get_value(&#39;dest-tls-verify&#39;)
+        if isinstance(dest_tls_verify, str):
+            dest_tls_verify = bool(strtobool(dest_tls_verify))
+        container_image_push_short_address = \
+            f&#34;{container_image_push_repository}:{container_image_push_tag}&#34;
+        container_image_push_address_by_tag = f&#34;{container_image_push_registry}&#34; \
+           f&#34;/{container_image_push_short_address}&#34;
 
         try:
             # login to any provider container registries
             # NOTE: important to specify the auth file because depending on the context this is
             #       being run in python process may not have permissions to default location
             containers_config_auth_file = self.get_value(&#39;containers-config-auth-file&#39;)
+            if not containers_config_auth_file:
+                containers_config_auth_file = os.path.join(
+                    self.work_dir_path,
+                    &#39;container-auth.json&#39;
+                )
             container_registries_login(
                 registries=self.get_value(&#39;container-registries&#39;),
                 containers_config_auth_file=containers_config_auth_file,
-                containers_config_tls_verify=util.strtobool(dest_tls_verify)
+                containers_config_tls_verify=dest_tls_verify
             )
 
             # push image
             sh.skopeo.copy( # pylint: disable=no-member
-                f&#34;--src-tls-verify={str(self.get_value(&#39;src-tls-verify&#39;))}&#34;,
-                f&#34;--dest-tls-verify={str(self.get_value(&#39;dest-tls-verify&#39;))}&#34;,
+                f&#34;--src-tls-verify={str(source_tls_verify).lower()}&#34;,
+                f&#34;--dest-tls-verify={str(dest_tls_verify).lower()}&#34;,
                 f&#34;--authfile={containers_config_auth_file}&#34;,
-                f&#39;docker-archive:{image_tar_file}&#39;,
-                f&#39;docker://{image_tag}&#39;,
+                f&#39;{pull_registry_type}{container_image_pull_address}&#39;,
+                f&#39;{push_registry_type}{container_image_push_address_by_tag}&#39;,
                 _out=sys.stdout,
                 _err=sys.stderr,
                 _tee=&#39;err&#39;
             )
         except sh.ErrorReturnCode as error:
             step_result.success = False
-            step_result.message = f&#39;Error pushing container image ({image_tar_file}) &#39; \
-                f&#39; to tag ({image_tag}) using skopeo: {error}&#39;
+            step_result.message = f&#39;Error pushing container image ({container_image_pull_address}) &#39; \
+                f&#39; to tag ({container_image_push_address_by_tag}) using skopeo: {error}&#39;
 
-        step_result.add_artifact(name=&#39;container-image-registry-uri&#39;, value=image_registry_uri)
+        # add address part artifacts
         step_result.add_artifact(
-            name=&#39;container-image-registry-organization&#39;,
-            value=image_registry_organization
+            name=&#39;container-image-push-registry&#39;,
+            value=container_image_push_registry,
+            description=&#39;Container image registry container image was pushed to.&#39;
         )
-        step_result.add_artifact(name=&#39;container-image-repository&#39;, value=image_repository)
-        step_result.add_artifact(name=&#39;container-image-name&#39;, value=image_repository)
-        step_result.add_artifact(name=&#39;container-image-version&#39;, value=image_version)
-        step_result.add_artifact(name=&#39;container-image-tag&#39;, value=image_tag)
+        step_result.add_artifact(
+            name=&#39;container-image-push-repository&#39;,
+            value=container_image_push_repository,
+            description=&#39;Container image repository container image was pushed to.&#39;
+        )
+        step_result.add_artifact(
+            name=&#39;container-image-push-tag&#39;,
+            value=container_image_push_tag,
+            description=&#39;Container image tag container image was pushed to.&#39;
+        )
+
+        # add address by tag artifacts
+        step_result.add_artifact(
+            name=&#39;container-image-address-by-tag&#39;,
+            value=container_image_push_address_by_tag,
+            description=&#39;Pushed container image address by tag.&#39;
+        )
+        step_result.add_artifact(
+            name=&#39;container-image-short-address-by-tag&#39;,
+            value=container_image_push_short_address,
+            description=&#39;Pushed container image short address (no registry) by tag.&#39;
+        )
+
+        # add address by digest artifacts
+        if step_result.success:
+            try:
+                print(&#34;Get pushed container image digest&#34;)
+                container_image_digest = get_container_image_digest(
+                    container_image_address=container_image_push_address_by_tag,
+                    containers_config_auth_file=containers_config_auth_file
+                )
+
+                container_image_short_address_by_digest = \
+                    f&#34;{container_image_push_repository}@{container_image_digest}&#34;
+                container_image_address_by_digest = \
+                    f&#34;{container_image_push_registry}/{container_image_short_address_by_digest}&#34;
+
+                step_result.add_artifact(
+                    name=&#39;container-image-push-digest&#39;,
+                    value=container_image_digest,
+                    description=&#39;Container image digest container image was pushed to.&#39;
+                )
+                step_result.add_artifact(
+                    name=&#39;container-image-address-by-digest&#39;,
+                    value=container_image_address_by_digest,
+                    description=&#39;Pushed container image address by digest.&#39;
+                )
+                step_result.add_artifact(
+                    name=&#39;container-image-short-address-by-digest&#39;,
+                    value=container_image_short_address_by_digest,
+                    description=&#39;Pushed container image short address (no registry) by digest.&#39;
+                )
+            except RuntimeError as error:
+                step_result.success = False
+                step_result.message = f&#34;Error getting pushed container image digest: {error}&#34;
 
         return step_result</code></pre>
 </details>
@@ -359,7 +484,7 @@ class Skopeo(StepImplementer):
         &#34;&#34;&#34;
         return REQUIRED_CONFIG_OR_PREVIOUS_STEP_RESULT_ARTIFACT_KEYS
 
-    def _run_step(self):
+    def _run_step(self): # pylint: disable=too-many-locals
         &#34;&#34;&#34;Runs the step implemented by this StepImplementer.
 
         Returns
@@ -369,56 +494,138 @@ class Skopeo(StepImplementer):
         &#34;&#34;&#34;
         step_result = StepResult.from_step_implementer(self)
 
-        image_version = self.get_value(&#39;container-image-version&#39;).lower()
-        application_name = self.get_value(&#39;application-name&#39;)
-        service_name = self.get_value(&#39;service-name&#39;)
-        organization = self.get_value(&#39;organization&#39;)
-        image_tar_file = self.get_value(&#39;image-tar-file&#39;)
-        destination_url = self.get_value(&#39;destination-url&#39;)
-        dest_tls_verify = self.get_value(&#39;dest-tls-verify&#39;)
+        # get src image config
+        pull_registry_type = self.get_value([
+            &#39;container-image-pull-registry-type&#39;,
+            &#39;container-image-registry-type&#39;
+        ])
+        container_image_pull_address = self.get_value([
+            &#39;container-image-pull-address&#39;,
+            &#39;container-image-build-address&#39;
+        ])
+        source_tls_verify = self.get_value([&#39;source-tls-verify&#39;, &#39;src-tls-verify&#39;])
+        if isinstance(source_tls_verify, str):
+            source_tls_verify = bool(strtobool(source_tls_verify))
 
-        image_registry_uri = destination_url
-        image_registry_organization = organization
-        image_repository = f&#34;{application_name}-{service_name}&#34;
-        image_tag = f&#34;{image_registry_uri}/{image_registry_organization}&#34; \
-                    f&#34;/{image_repository}:{image_version}&#34;
+        # create destination config
+        push_registry_type = self.get_value([
+            &#39;container-image-push-registry-type&#39;,
+            &#39;container-image-registry-type&#39;
+        ])
+        container_image_push_registry = self.get_value([
+            &#39;container-image-push-registry&#39;,
+            &#39;destination-url&#39;
+        ])
+        container_image_push_repository = self.get_value([
+            &#39;container-image-push-repository&#39;,
+            &#39;container-image-repository&#39;
+        ])
+        container_image_push_tag = self.get_value([
+            &#39;container-image-push-tag&#39;,
+            &#39;container-image-tag&#39;,
+            &#39;container-image-version&#39;
+        ])
+        dest_tls_verify = self.get_value(&#39;dest-tls-verify&#39;)
+        if isinstance(dest_tls_verify, str):
+            dest_tls_verify = bool(strtobool(dest_tls_verify))
+        container_image_push_short_address = \
+            f&#34;{container_image_push_repository}:{container_image_push_tag}&#34;
+        container_image_push_address_by_tag = f&#34;{container_image_push_registry}&#34; \
+           f&#34;/{container_image_push_short_address}&#34;
 
         try:
             # login to any provider container registries
             # NOTE: important to specify the auth file because depending on the context this is
             #       being run in python process may not have permissions to default location
             containers_config_auth_file = self.get_value(&#39;containers-config-auth-file&#39;)
+            if not containers_config_auth_file:
+                containers_config_auth_file = os.path.join(
+                    self.work_dir_path,
+                    &#39;container-auth.json&#39;
+                )
             container_registries_login(
                 registries=self.get_value(&#39;container-registries&#39;),
                 containers_config_auth_file=containers_config_auth_file,
-                containers_config_tls_verify=util.strtobool(dest_tls_verify)
+                containers_config_tls_verify=dest_tls_verify
             )
 
             # push image
             sh.skopeo.copy( # pylint: disable=no-member
-                f&#34;--src-tls-verify={str(self.get_value(&#39;src-tls-verify&#39;))}&#34;,
-                f&#34;--dest-tls-verify={str(self.get_value(&#39;dest-tls-verify&#39;))}&#34;,
+                f&#34;--src-tls-verify={str(source_tls_verify).lower()}&#34;,
+                f&#34;--dest-tls-verify={str(dest_tls_verify).lower()}&#34;,
                 f&#34;--authfile={containers_config_auth_file}&#34;,
-                f&#39;docker-archive:{image_tar_file}&#39;,
-                f&#39;docker://{image_tag}&#39;,
+                f&#39;{pull_registry_type}{container_image_pull_address}&#39;,
+                f&#39;{push_registry_type}{container_image_push_address_by_tag}&#39;,
                 _out=sys.stdout,
                 _err=sys.stderr,
                 _tee=&#39;err&#39;
             )
         except sh.ErrorReturnCode as error:
             step_result.success = False
-            step_result.message = f&#39;Error pushing container image ({image_tar_file}) &#39; \
-                f&#39; to tag ({image_tag}) using skopeo: {error}&#39;
+            step_result.message = f&#39;Error pushing container image ({container_image_pull_address}) &#39; \
+                f&#39; to tag ({container_image_push_address_by_tag}) using skopeo: {error}&#39;
 
-        step_result.add_artifact(name=&#39;container-image-registry-uri&#39;, value=image_registry_uri)
+        # add address part artifacts
         step_result.add_artifact(
-            name=&#39;container-image-registry-organization&#39;,
-            value=image_registry_organization
+            name=&#39;container-image-push-registry&#39;,
+            value=container_image_push_registry,
+            description=&#39;Container image registry container image was pushed to.&#39;
         )
-        step_result.add_artifact(name=&#39;container-image-repository&#39;, value=image_repository)
-        step_result.add_artifact(name=&#39;container-image-name&#39;, value=image_repository)
-        step_result.add_artifact(name=&#39;container-image-version&#39;, value=image_version)
-        step_result.add_artifact(name=&#39;container-image-tag&#39;, value=image_tag)
+        step_result.add_artifact(
+            name=&#39;container-image-push-repository&#39;,
+            value=container_image_push_repository,
+            description=&#39;Container image repository container image was pushed to.&#39;
+        )
+        step_result.add_artifact(
+            name=&#39;container-image-push-tag&#39;,
+            value=container_image_push_tag,
+            description=&#39;Container image tag container image was pushed to.&#39;
+        )
+
+        # add address by tag artifacts
+        step_result.add_artifact(
+            name=&#39;container-image-address-by-tag&#39;,
+            value=container_image_push_address_by_tag,
+            description=&#39;Pushed container image address by tag.&#39;
+        )
+        step_result.add_artifact(
+            name=&#39;container-image-short-address-by-tag&#39;,
+            value=container_image_push_short_address,
+            description=&#39;Pushed container image short address (no registry) by tag.&#39;
+        )
+
+        # add address by digest artifacts
+        if step_result.success:
+            try:
+                print(&#34;Get pushed container image digest&#34;)
+                container_image_digest = get_container_image_digest(
+                    container_image_address=container_image_push_address_by_tag,
+                    containers_config_auth_file=containers_config_auth_file
+                )
+
+                container_image_short_address_by_digest = \
+                    f&#34;{container_image_push_repository}@{container_image_digest}&#34;
+                container_image_address_by_digest = \
+                    f&#34;{container_image_push_registry}/{container_image_short_address_by_digest}&#34;
+
+                step_result.add_artifact(
+                    name=&#39;container-image-push-digest&#39;,
+                    value=container_image_digest,
+                    description=&#39;Container image digest container image was pushed to.&#39;
+                )
+                step_result.add_artifact(
+                    name=&#39;container-image-address-by-digest&#39;,
+                    value=container_image_address_by_digest,
+                    description=&#39;Pushed container image address by digest.&#39;
+                )
+                step_result.add_artifact(
+                    name=&#39;container-image-short-address-by-digest&#39;,
+                    value=container_image_short_address_by_digest,
+                    description=&#39;Pushed container image short address (no registry) by digest.&#39;
+                )
+            except RuntimeError as error:
+                step_result.success = False
+                step_result.message = f&#34;Error getting pushed container image digest: {error}&#34;
 
         return step_result</code></pre>
 </details>
@@ -521,7 +728,7 @@ def step_implementer_config_defaults():
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

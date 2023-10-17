@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>ploigos_step_runner.utils.containers API documentation</title>
 <meta name="description" content="Shared utils for dealing with containers." />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -30,10 +30,15 @@
 <pre><code class="python">&#34;&#34;&#34;Shared utils for dealing with containers.
 &#34;&#34;&#34;
 
+import json
 import sys
+from io import StringIO
 
 import sh
 from ploigos_step_runner.config.config_value import ConfigValue
+from ploigos_step_runner.utils.io import \
+    create_sh_redirect_to_multiple_streams_fn_callback
+
 
 def container_registries_login(  #pylint: disable=too-many-branches
     registries,
@@ -138,13 +143,13 @@ def container_registries_login(  #pylint: disable=too-many-branches
             else:
                 registry_uri = registry_key
 
-            if containers_config_tls_verify is False:
-                registry_tls_verify = False
-            else:
+            if containers_config_tls_verify:
                 if &#39;tls-verify&#39; in registry_conf:
                     registry_tls_verify = registry_conf[&#39;tls-verify&#39;]
                 else:
                     registry_tls_verify = True
+            else:
+                registry_tls_verify = False
 
             container_registry_login(
                 container_registry_uri=registry_uri,
@@ -169,13 +174,13 @@ def container_registries_login(  #pylint: disable=too-many-branches
                 f&#34;Configuration for container registry &#34; \
                 f&#34;must specify a &#39;password&#39;: {registry_conf}&#34;
 
-            if containers_config_tls_verify is False:
-                registry_tls_verify = False
-            else:
+            if containers_config_tls_verify:
                 if &#39;tls-verify&#39; in registry_conf:
                     registry_tls_verify = registry_conf[&#39;tls-verify&#39;]
                 else:
                     registry_tls_verify = True
+            else:
+                registry_tls_verify = False
 
             container_registry_login(
                 container_registry_uri=registry_conf[&#39;uri&#39;],
@@ -303,7 +308,330 @@ def container_registry_login( #pylint: disable=too-many-arguments,too-many-branc
         raise RuntimeError(
             f&#34;Failed to login to container registry ({container_registry_uri}) &#34;
             f&#34;with username ({container_registry_username}): {error}&#34;
-        ) from error</code></pre>
+        ) from error
+
+def create_container_from_image(
+    image_address,
+    repository_type=&#39;container-storage:&#39;
+):
+    &#34;&#34;&#34;Import a container image using buildah form a TAR file.
+
+    Parameters
+    ----------
+    image_address : str
+        Image tag to create a container from.
+        ex:
+        * localhost/my-app:latest
+        * quay.io/my-org/my-app:latest
+        * docker-archive:/local/path/to/my-app-container-image.tar
+    container_name : str
+        name for the working container.
+    repository_type : str
+        The type of repository to mount the given image tag from.
+        See https://github.com/containers/skopeo for details on different repository types.
+
+    Returns
+    -------
+    str
+        Name of the imported container.
+
+    Raises
+    ------
+    RuntimeError
+        If error importing image.
+    &#34;&#34;&#34;
+    container_name = None
+    try:
+        buildah_from_out_buff = StringIO()
+        buildah_from_out_callback = create_sh_redirect_to_multiple_streams_fn_callback([
+            sys.stdout,
+            buildah_from_out_buff
+        ])
+        sh.buildah(  # pylint: disable=no-member
+            &#39;from&#39;,
+            f&#34;{repository_type}{image_address}&#34;,
+            _out=buildah_from_out_callback,
+            _err=sys.stderr,
+            _tee=&#39;err&#39;
+        )
+        container_name = buildah_from_out_buff.getvalue().rstrip()
+    except sh.ErrorReturnCode as error:
+        raise RuntimeError(
+            f&#39;Error creating container from image ({image_address}): {error}&#39;
+        ) from error
+
+    return container_name
+
+
+def mount_container(buildah_unshare_command, container_id):
+    &#34;&#34;&#34;Use buildah to mount a container.
+
+    Parameters
+    ----------
+    buildah_unshare_command : sh.buildah.unshare.bake()
+        A baked sh.buildah.unshare command to use to run this command in the context off
+        so that this can be done &#34;rootless&#34;.
+    container_id : str
+        ID of the container to mount.
+
+    Returns
+    -------
+    str
+        Absolute path to the mounted container.
+
+    Raises
+    ------
+    RuntimeError
+        If error mounting the container.
+    &#34;&#34;&#34;
+    mount_path = None
+    try:
+        buildah_mount_out_buff = StringIO()
+        buildah_mount_out_callback = create_sh_redirect_to_multiple_streams_fn_callback([
+            sys.stdout,
+            buildah_mount_out_buff
+        ])
+        buildah_mount_command = buildah_unshare_command.bake(&#34;buildah&#34;, &#34;mount&#34;)
+        buildah_mount_command(
+            container_id,
+            _out=buildah_mount_out_callback,
+            _err=sys.stderr,
+            _tee=&#39;err&#39;
+        )
+        mount_path = buildah_mount_out_buff.getvalue().rstrip()
+    except sh.ErrorReturnCode as error:
+        raise RuntimeError(
+            f&#39;Error mounting container ({container_id}): {error}&#39;
+        ) from error
+
+    return mount_path
+
+def determine_container_image_address_info(
+    contaimer_image_registry,
+    container_image_tag,
+    organization,
+    application_name,
+    service_name
+):
+    &#34;&#34;&#34;Determines the full and short build tags for a new container image.
+
+    Parameters
+    ----------
+    container_image_tag : str
+        A given image version. If none given, latest will be used.
+    organization : str
+        Organization the container image belongs to.
+    application_name : str
+        Application the container image belongs to.
+    service_name : str
+        Service the container image implements.
+
+    Returns
+    -------
+    str, str, str, str, str
+        First result is the full build tag, including registry URI.
+        Second result is the short build tag, as in no registry URI.
+        Third result is the image registry uri.
+        Forth result is the image repository name.
+        Fifth result is the used image version.
+
+    &#34;&#34;&#34;
+    if container_image_tag is None:
+        container_image_tag = &#39;latest&#39;
+        print(&#39;No image tag version found in metadata. Using latest&#39;)
+
+    container_image_repository = f&#34;{organization}/{application_name}&#34;
+    if service_name:
+        container_image_repository += f&#34;/{service_name}&#34;
+
+    container_image_build_short_address = f&#34;{container_image_repository}:{container_image_tag}&#34;
+    container_image_build_address = \
+        f&#34;{contaimer_image_registry}/{container_image_build_short_address}&#34;
+
+    return container_image_build_address, container_image_build_short_address,\
+        contaimer_image_registry, container_image_repository, container_image_tag
+
+def inspect_container_image(
+    container_image_address,
+    containers_config_auth_file=None
+):
+    &#34;&#34;&#34;Inspects a given container image for all its details. Useful for getting image labels
+    and such.
+
+    Parameters
+    ----------
+    container_image_address : str
+        URI to the container image to inspect
+    containers_config_auth_file : str
+        Path to container image registries authentication file.
+
+    Raises
+    ------
+    RuntimeError
+        If issue running `buildah inspect`
+
+    Returns
+    -------
+    dict
+        Container image details from `buildah inspect`
+    &#34;&#34;&#34;
+    buildah_inspect = None
+
+    # determine auth flags
+    if containers_config_auth_file:
+        buildah_authfile_flags = [&#39;--authfile&#39;, containers_config_auth_file]
+    else:
+        buildah_authfile_flags = []
+
+    # pull container image (can&#39;t inspect remote image)
+    try:
+        sh.buildah.pull( # pylint: disable=no-member
+            *buildah_authfile_flags,
+            container_image_address
+        )
+    except sh.ErrorReturnCode as error:  # pylint: disable=undefined-variable
+        raise RuntimeError(
+            f&#34;Error pulling container image ({container_image_address}) for inspection: {error}&#34;
+        ) from error
+
+    # get container image information
+    try:
+
+        buildah_inspect_out_buff = StringIO()
+        sh.buildah.inspect( # pylint: disable=no-member
+            container_image_address,
+            _out=buildah_inspect_out_buff
+        )
+        buildah_inspect_out = buildah_inspect_out_buff.getvalue().rstrip()
+        buildah_inspect = json.loads(buildah_inspect_out)
+    except sh.ErrorReturnCode as error:  # pylint: disable=undefined-variable
+        raise RuntimeError(
+            f&#34;Error inspecting container image ({container_image_address}): {error}&#34;
+        ) from error
+
+    return buildah_inspect
+
+def get_container_image_digest(
+    container_image_address,
+    containers_config_auth_file=None
+):
+    &#34;&#34;&#34;Get the container image digest for a given container image.
+
+    Will pull the given container image if needed.
+
+    Parameters
+    ----------
+    container_image_address : str
+        URI to the container image to get the container image digest for.
+    containers_config_auth_file : str
+        Path to container image registries authentication file.
+
+    Raises
+    ------
+    RuntimeError
+        If error inspecting container image to get digest.
+        If error finding digest on container image inspection results.
+
+    Returns
+    -------
+    str
+        Container image digest for given container image.
+    &#34;&#34;&#34;
+    try:
+        container_image_details = inspect_container_image(
+            container_image_address=container_image_address,
+            containers_config_auth_file=containers_config_auth_file
+        )
+
+        return container_image_details[&#39;FromImageDigest&#39;]
+    except RuntimeError as error:
+        raise RuntimeError(
+            f&#34;Error getting container image ({container_image_address}) image digest: {error}&#34;
+        ) from error
+    except KeyError as error:
+        raise RuntimeError(
+            f&#34;Error finding container image ({container_image_address}) image digest from&#34; \
+            f&#34; container image inspection.&#34;
+        ) from error
+
+def add_container_build_step_result_artifacts(
+    step_result,
+    contaimer_image_registry,
+    container_image_repository,
+    container_image_tag,
+    container_image_digest,
+    container_image_build_address,
+    container_image_build_short_address
+): # pylint: disable=too-many-arguments
+    &#34;&#34;&#34;Helper function to consistently add step results when building a container image.
+
+    NOTE: long term probably should move this into some mixin class that all container build
+    StepImplementers also inherit from, but thats another pattern don&#39;t want to introduce right now.
+
+    Parameters
+    ----------
+    step_result : StepResult
+        Step result to add the container build artifacts to.
+    contaimer_image_registry : str
+        Container image registry the image was built into.
+    container_image_repository : str
+        Container image repository the image was built into.
+    container_image_tag : str
+        Container image tag the built image was tagged with.
+    container_image_digest : str
+        Container image digest of built image.
+    container_image_build_address : str
+        Container image full address (with registry) the image was built into and can
+        be referenced by to push somewhere else.
+    container_image_build_short_address : str
+        Container image short address (without registry) the image was built into and can
+        be referenced by to push somewhere else, assuming the registry is on the local container
+        search path.
+
+    Results
+    -------
+    step_result : StepResult
+        The given StepResult which was modified in place.
+        Returned for convenience / and clarity.
+    &#34;&#34;&#34;
+    if contaimer_image_registry:
+        step_result.add_artifact(
+            name=&#39;container-image-registry&#39;,
+            value=contaimer_image_registry,
+            description=&#39;Container image registry of the built container image address.&#39;
+        )
+    if container_image_repository:
+        step_result.add_artifact(
+            name=&#39;container-image-repository&#39;,
+            value=container_image_repository,
+            description=&#39;Container image repository of the built container image address.&#39;
+        )
+    if container_image_tag:
+        step_result.add_artifact(
+            name=&#39;container-image-tag&#39;,
+            value=container_image_tag,
+            description=&#39;Container image tag of the built container image address.&#39;
+        )
+    if container_image_digest:
+        step_result.add_artifact(
+            name=&#39;container-image-build-digest&#39;,
+            value=container_image_digest,
+            description=&#39;Container image digest of the built container image address.&#39;
+        )
+    if container_image_build_address:
+        step_result.add_artifact(
+            name=&#39;container-image-build-address&#39;,
+            value=container_image_build_address,
+            description=&#39;Container image address of the built container image.&#39;
+        )
+    if container_image_build_short_address:
+        step_result.add_artifact(
+            name=&#39;container-image-build-short-address&#39;,
+            value=container_image_build_short_address,
+            description=&#39;Container image short address (no registry) of the built container image.&#39;
+        )
+
+    return step_result</code></pre>
 </details>
 </section>
 <section>
@@ -313,6 +641,121 @@ def container_registry_login( #pylint: disable=too-many-arguments,too-many-branc
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
+<dt id="ploigos_step_runner.utils.containers.add_container_build_step_result_artifacts"><code class="name flex">
+<span>def <span class="ident">add_container_build_step_result_artifacts</span></span>(<span>step_result, contaimer_image_registry, container_image_repository, container_image_tag, container_image_digest, container_image_build_address, container_image_build_short_address)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Helper function to consistently add step results when building a container image.</p>
+<p>NOTE: long term probably should move this into some mixin class that all container build
+StepImplementers also inherit from, but thats another pattern don't want to introduce right now.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>step_result</code></strong> :&ensp;<code>StepResult</code></dt>
+<dd>Step result to add the container build artifacts to.</dd>
+<dt><strong><code>contaimer_image_registry</code></strong> :&ensp;<code>str</code></dt>
+<dd>Container image registry the image was built into.</dd>
+<dt><strong><code>container_image_repository</code></strong> :&ensp;<code>str</code></dt>
+<dd>Container image repository the image was built into.</dd>
+<dt><strong><code>container_image_tag</code></strong> :&ensp;<code>str</code></dt>
+<dd>Container image tag the built image was tagged with.</dd>
+<dt><strong><code>container_image_digest</code></strong> :&ensp;<code>str</code></dt>
+<dd>Container image digest of built image.</dd>
+<dt><strong><code>container_image_build_address</code></strong> :&ensp;<code>str</code></dt>
+<dd>Container image full address (with registry) the image was built into and can
+be referenced by to push somewhere else.</dd>
+<dt><strong><code>container_image_build_short_address</code></strong> :&ensp;<code>str</code></dt>
+<dd>Container image short address (without registry) the image was built into and can
+be referenced by to push somewhere else, assuming the registry is on the local container
+search path.</dd>
+</dl>
+<h2 id="results">Results</h2>
+<p>step_result : StepResult
+The given StepResult which was modified in place.
+Returned for convenience / and clarity.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_container_build_step_result_artifacts(
+    step_result,
+    contaimer_image_registry,
+    container_image_repository,
+    container_image_tag,
+    container_image_digest,
+    container_image_build_address,
+    container_image_build_short_address
+): # pylint: disable=too-many-arguments
+    &#34;&#34;&#34;Helper function to consistently add step results when building a container image.
+
+    NOTE: long term probably should move this into some mixin class that all container build
+    StepImplementers also inherit from, but thats another pattern don&#39;t want to introduce right now.
+
+    Parameters
+    ----------
+    step_result : StepResult
+        Step result to add the container build artifacts to.
+    contaimer_image_registry : str
+        Container image registry the image was built into.
+    container_image_repository : str
+        Container image repository the image was built into.
+    container_image_tag : str
+        Container image tag the built image was tagged with.
+    container_image_digest : str
+        Container image digest of built image.
+    container_image_build_address : str
+        Container image full address (with registry) the image was built into and can
+        be referenced by to push somewhere else.
+    container_image_build_short_address : str
+        Container image short address (without registry) the image was built into and can
+        be referenced by to push somewhere else, assuming the registry is on the local container
+        search path.
+
+    Results
+    -------
+    step_result : StepResult
+        The given StepResult which was modified in place.
+        Returned for convenience / and clarity.
+    &#34;&#34;&#34;
+    if contaimer_image_registry:
+        step_result.add_artifact(
+            name=&#39;container-image-registry&#39;,
+            value=contaimer_image_registry,
+            description=&#39;Container image registry of the built container image address.&#39;
+        )
+    if container_image_repository:
+        step_result.add_artifact(
+            name=&#39;container-image-repository&#39;,
+            value=container_image_repository,
+            description=&#39;Container image repository of the built container image address.&#39;
+        )
+    if container_image_tag:
+        step_result.add_artifact(
+            name=&#39;container-image-tag&#39;,
+            value=container_image_tag,
+            description=&#39;Container image tag of the built container image address.&#39;
+        )
+    if container_image_digest:
+        step_result.add_artifact(
+            name=&#39;container-image-build-digest&#39;,
+            value=container_image_digest,
+            description=&#39;Container image digest of the built container image address.&#39;
+        )
+    if container_image_build_address:
+        step_result.add_artifact(
+            name=&#39;container-image-build-address&#39;,
+            value=container_image_build_address,
+            description=&#39;Container image address of the built container image.&#39;
+        )
+    if container_image_build_short_address:
+        step_result.add_artifact(
+            name=&#39;container-image-build-short-address&#39;,
+            value=container_image_build_short_address,
+            description=&#39;Container image short address (no registry) of the built container image.&#39;
+        )
+
+    return step_result</code></pre>
+</details>
+</dd>
 <dt id="ploigos_step_runner.utils.containers.container_registries_login"><code class="name flex">
 <span>def <span class="ident">container_registries_login</span></span>(<span>registries, containers_config_auth_file=None, containers_config_tls_verify=True, container_command_short_name=None)</span>
 </code></dt>
@@ -494,13 +937,13 @@ If not provided will pick the first command found in order (buildah, podman, sko
             else:
                 registry_uri = registry_key
 
-            if containers_config_tls_verify is False:
-                registry_tls_verify = False
-            else:
+            if containers_config_tls_verify:
                 if &#39;tls-verify&#39; in registry_conf:
                     registry_tls_verify = registry_conf[&#39;tls-verify&#39;]
                 else:
                     registry_tls_verify = True
+            else:
+                registry_tls_verify = False
 
             container_registry_login(
                 container_registry_uri=registry_uri,
@@ -525,13 +968,13 @@ If not provided will pick the first command found in order (buildah, podman, sko
                 f&#34;Configuration for container registry &#34; \
                 f&#34;must specify a &#39;password&#39;: {registry_conf}&#34;
 
-            if containers_config_tls_verify is False:
-                registry_tls_verify = False
-            else:
+            if containers_config_tls_verify:
                 if &#39;tls-verify&#39; in registry_conf:
                     registry_tls_verify = registry_conf[&#39;tls-verify&#39;]
                 else:
                     registry_tls_verify = True
+            else:
+                registry_tls_verify = False
 
             container_registry_login(
                 container_registry_uri=registry_conf[&#39;uri&#39;],
@@ -712,6 +1155,398 @@ When error loging into container registry.</dd>
         ) from error</code></pre>
 </details>
 </dd>
+<dt id="ploigos_step_runner.utils.containers.create_container_from_image"><code class="name flex">
+<span>def <span class="ident">create_container_from_image</span></span>(<span>image_address, repository_type='container-storage:')</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Import a container image using buildah form a TAR file.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>image_address</code></strong> :&ensp;<code>str</code></dt>
+<dd>Image tag to create a container from.
+ex:
+* localhost/my-app:latest
+* quay.io/my-org/my-app:latest
+* docker-archive:/local/path/to/my-app-container-image.tar</dd>
+<dt><strong><code>container_name</code></strong> :&ensp;<code>str</code></dt>
+<dd>name for the working container.</dd>
+<dt><strong><code>repository_type</code></strong> :&ensp;<code>str</code></dt>
+<dd>The type of repository to mount the given image tag from.
+See <a href="https://github.com/containers/skopeo">https://github.com/containers/skopeo</a> for details on different repository types.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>Name of the imported container.</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>RuntimeError</code></dt>
+<dd>If error importing image.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def create_container_from_image(
+    image_address,
+    repository_type=&#39;container-storage:&#39;
+):
+    &#34;&#34;&#34;Import a container image using buildah form a TAR file.
+
+    Parameters
+    ----------
+    image_address : str
+        Image tag to create a container from.
+        ex:
+        * localhost/my-app:latest
+        * quay.io/my-org/my-app:latest
+        * docker-archive:/local/path/to/my-app-container-image.tar
+    container_name : str
+        name for the working container.
+    repository_type : str
+        The type of repository to mount the given image tag from.
+        See https://github.com/containers/skopeo for details on different repository types.
+
+    Returns
+    -------
+    str
+        Name of the imported container.
+
+    Raises
+    ------
+    RuntimeError
+        If error importing image.
+    &#34;&#34;&#34;
+    container_name = None
+    try:
+        buildah_from_out_buff = StringIO()
+        buildah_from_out_callback = create_sh_redirect_to_multiple_streams_fn_callback([
+            sys.stdout,
+            buildah_from_out_buff
+        ])
+        sh.buildah(  # pylint: disable=no-member
+            &#39;from&#39;,
+            f&#34;{repository_type}{image_address}&#34;,
+            _out=buildah_from_out_callback,
+            _err=sys.stderr,
+            _tee=&#39;err&#39;
+        )
+        container_name = buildah_from_out_buff.getvalue().rstrip()
+    except sh.ErrorReturnCode as error:
+        raise RuntimeError(
+            f&#39;Error creating container from image ({image_address}): {error}&#39;
+        ) from error
+
+    return container_name</code></pre>
+</details>
+</dd>
+<dt id="ploigos_step_runner.utils.containers.determine_container_image_address_info"><code class="name flex">
+<span>def <span class="ident">determine_container_image_address_info</span></span>(<span>contaimer_image_registry, container_image_tag, organization, application_name, service_name)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Determines the full and short build tags for a new container image.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>container_image_tag</code></strong> :&ensp;<code>str</code></dt>
+<dd>A given image version. If none given, latest will be used.</dd>
+<dt><strong><code>organization</code></strong> :&ensp;<code>str</code></dt>
+<dd>Organization the container image belongs to.</dd>
+<dt><strong><code>application_name</code></strong> :&ensp;<code>str</code></dt>
+<dd>Application the container image belongs to.</dd>
+<dt><strong><code>service_name</code></strong> :&ensp;<code>str</code></dt>
+<dd>Service the container image implements.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str, str, str, str, str</code></dt>
+<dd>First result is the full build tag, including registry URI.
+Second result is the short build tag, as in no registry URI.
+Third result is the image registry uri.
+Forth result is the image repository name.
+Fifth result is the used image version.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def determine_container_image_address_info(
+    contaimer_image_registry,
+    container_image_tag,
+    organization,
+    application_name,
+    service_name
+):
+    &#34;&#34;&#34;Determines the full and short build tags for a new container image.
+
+    Parameters
+    ----------
+    container_image_tag : str
+        A given image version. If none given, latest will be used.
+    organization : str
+        Organization the container image belongs to.
+    application_name : str
+        Application the container image belongs to.
+    service_name : str
+        Service the container image implements.
+
+    Returns
+    -------
+    str, str, str, str, str
+        First result is the full build tag, including registry URI.
+        Second result is the short build tag, as in no registry URI.
+        Third result is the image registry uri.
+        Forth result is the image repository name.
+        Fifth result is the used image version.
+
+    &#34;&#34;&#34;
+    if container_image_tag is None:
+        container_image_tag = &#39;latest&#39;
+        print(&#39;No image tag version found in metadata. Using latest&#39;)
+
+    container_image_repository = f&#34;{organization}/{application_name}&#34;
+    if service_name:
+        container_image_repository += f&#34;/{service_name}&#34;
+
+    container_image_build_short_address = f&#34;{container_image_repository}:{container_image_tag}&#34;
+    container_image_build_address = \
+        f&#34;{contaimer_image_registry}/{container_image_build_short_address}&#34;
+
+    return container_image_build_address, container_image_build_short_address,\
+        contaimer_image_registry, container_image_repository, container_image_tag</code></pre>
+</details>
+</dd>
+<dt id="ploigos_step_runner.utils.containers.get_container_image_digest"><code class="name flex">
+<span>def <span class="ident">get_container_image_digest</span></span>(<span>container_image_address, containers_config_auth_file=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Get the container image digest for a given container image.</p>
+<p>Will pull the given container image if needed.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>container_image_address</code></strong> :&ensp;<code>str</code></dt>
+<dd>URI to the container image to get the container image digest for.</dd>
+<dt><strong><code>containers_config_auth_file</code></strong> :&ensp;<code>str</code></dt>
+<dd>Path to container image registries authentication file.</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>RuntimeError</code></dt>
+<dd>If error inspecting container image to get digest.
+If error finding digest on container image inspection results.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>Container image digest for given container image.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_container_image_digest(
+    container_image_address,
+    containers_config_auth_file=None
+):
+    &#34;&#34;&#34;Get the container image digest for a given container image.
+
+    Will pull the given container image if needed.
+
+    Parameters
+    ----------
+    container_image_address : str
+        URI to the container image to get the container image digest for.
+    containers_config_auth_file : str
+        Path to container image registries authentication file.
+
+    Raises
+    ------
+    RuntimeError
+        If error inspecting container image to get digest.
+        If error finding digest on container image inspection results.
+
+    Returns
+    -------
+    str
+        Container image digest for given container image.
+    &#34;&#34;&#34;
+    try:
+        container_image_details = inspect_container_image(
+            container_image_address=container_image_address,
+            containers_config_auth_file=containers_config_auth_file
+        )
+
+        return container_image_details[&#39;FromImageDigest&#39;]
+    except RuntimeError as error:
+        raise RuntimeError(
+            f&#34;Error getting container image ({container_image_address}) image digest: {error}&#34;
+        ) from error
+    except KeyError as error:
+        raise RuntimeError(
+            f&#34;Error finding container image ({container_image_address}) image digest from&#34; \
+            f&#34; container image inspection.&#34;
+        ) from error</code></pre>
+</details>
+</dd>
+<dt id="ploigos_step_runner.utils.containers.inspect_container_image"><code class="name flex">
+<span>def <span class="ident">inspect_container_image</span></span>(<span>container_image_address, containers_config_auth_file=None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Inspects a given container image for all its details. Useful for getting image labels
+and such.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>container_image_address</code></strong> :&ensp;<code>str</code></dt>
+<dd>URI to the container image to inspect</dd>
+<dt><strong><code>containers_config_auth_file</code></strong> :&ensp;<code>str</code></dt>
+<dd>Path to container image registries authentication file.</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>RuntimeError</code></dt>
+<dd>If issue running <code>buildah inspect</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>dict</code></dt>
+<dd>Container image details from <code>buildah inspect</code></dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def inspect_container_image(
+    container_image_address,
+    containers_config_auth_file=None
+):
+    &#34;&#34;&#34;Inspects a given container image for all its details. Useful for getting image labels
+    and such.
+
+    Parameters
+    ----------
+    container_image_address : str
+        URI to the container image to inspect
+    containers_config_auth_file : str
+        Path to container image registries authentication file.
+
+    Raises
+    ------
+    RuntimeError
+        If issue running `buildah inspect`
+
+    Returns
+    -------
+    dict
+        Container image details from `buildah inspect`
+    &#34;&#34;&#34;
+    buildah_inspect = None
+
+    # determine auth flags
+    if containers_config_auth_file:
+        buildah_authfile_flags = [&#39;--authfile&#39;, containers_config_auth_file]
+    else:
+        buildah_authfile_flags = []
+
+    # pull container image (can&#39;t inspect remote image)
+    try:
+        sh.buildah.pull( # pylint: disable=no-member
+            *buildah_authfile_flags,
+            container_image_address
+        )
+    except sh.ErrorReturnCode as error:  # pylint: disable=undefined-variable
+        raise RuntimeError(
+            f&#34;Error pulling container image ({container_image_address}) for inspection: {error}&#34;
+        ) from error
+
+    # get container image information
+    try:
+
+        buildah_inspect_out_buff = StringIO()
+        sh.buildah.inspect( # pylint: disable=no-member
+            container_image_address,
+            _out=buildah_inspect_out_buff
+        )
+        buildah_inspect_out = buildah_inspect_out_buff.getvalue().rstrip()
+        buildah_inspect = json.loads(buildah_inspect_out)
+    except sh.ErrorReturnCode as error:  # pylint: disable=undefined-variable
+        raise RuntimeError(
+            f&#34;Error inspecting container image ({container_image_address}): {error}&#34;
+        ) from error
+
+    return buildah_inspect</code></pre>
+</details>
+</dd>
+<dt id="ploigos_step_runner.utils.containers.mount_container"><code class="name flex">
+<span>def <span class="ident">mount_container</span></span>(<span>buildah_unshare_command, container_id)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Use buildah to mount a container.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>buildah_unshare_command</code></strong> :&ensp;<code>sh.buildah.unshare.bake()</code></dt>
+<dd>A baked sh.buildah.unshare command to use to run this command in the context off
+so that this can be done "rootless".</dd>
+<dt><strong><code>container_id</code></strong> :&ensp;<code>str</code></dt>
+<dd>ID of the container to mount.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>Absolute path to the mounted container.</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>RuntimeError</code></dt>
+<dd>If error mounting the container.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def mount_container(buildah_unshare_command, container_id):
+    &#34;&#34;&#34;Use buildah to mount a container.
+
+    Parameters
+    ----------
+    buildah_unshare_command : sh.buildah.unshare.bake()
+        A baked sh.buildah.unshare command to use to run this command in the context off
+        so that this can be done &#34;rootless&#34;.
+    container_id : str
+        ID of the container to mount.
+
+    Returns
+    -------
+    str
+        Absolute path to the mounted container.
+
+    Raises
+    ------
+    RuntimeError
+        If error mounting the container.
+    &#34;&#34;&#34;
+    mount_path = None
+    try:
+        buildah_mount_out_buff = StringIO()
+        buildah_mount_out_callback = create_sh_redirect_to_multiple_streams_fn_callback([
+            sys.stdout,
+            buildah_mount_out_buff
+        ])
+        buildah_mount_command = buildah_unshare_command.bake(&#34;buildah&#34;, &#34;mount&#34;)
+        buildah_mount_command(
+            container_id,
+            _out=buildah_mount_out_callback,
+            _err=sys.stderr,
+            _tee=&#39;err&#39;
+        )
+        mount_path = buildah_mount_out_buff.getvalue().rstrip()
+    except sh.ErrorReturnCode as error:
+        raise RuntimeError(
+            f&#39;Error mounting container ({container_id}): {error}&#39;
+        ) from error
+
+    return mount_path</code></pre>
+</details>
+</dd>
 </dl>
 </section>
 <section>
@@ -730,15 +1565,21 @@ When error loging into container registry.</dd>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
+<li><code><a title="ploigos_step_runner.utils.containers.add_container_build_step_result_artifacts" href="#ploigos_step_runner.utils.containers.add_container_build_step_result_artifacts">add_container_build_step_result_artifacts</a></code></li>
 <li><code><a title="ploigos_step_runner.utils.containers.container_registries_login" href="#ploigos_step_runner.utils.containers.container_registries_login">container_registries_login</a></code></li>
 <li><code><a title="ploigos_step_runner.utils.containers.container_registry_login" href="#ploigos_step_runner.utils.containers.container_registry_login">container_registry_login</a></code></li>
+<li><code><a title="ploigos_step_runner.utils.containers.create_container_from_image" href="#ploigos_step_runner.utils.containers.create_container_from_image">create_container_from_image</a></code></li>
+<li><code><a title="ploigos_step_runner.utils.containers.determine_container_image_address_info" href="#ploigos_step_runner.utils.containers.determine_container_image_address_info">determine_container_image_address_info</a></code></li>
+<li><code><a title="ploigos_step_runner.utils.containers.get_container_image_digest" href="#ploigos_step_runner.utils.containers.get_container_image_digest">get_container_image_digest</a></code></li>
+<li><code><a title="ploigos_step_runner.utils.containers.inspect_container_image" href="#ploigos_step_runner.utils.containers.inspect_container_image">inspect_container_image</a></code></li>
+<li><code><a title="ploigos_step_runner.utils.containers.mount_container" href="#ploigos_step_runner.utils.containers.mount_container">mount_container</a></code></li>
 </ul>
 </li>
 </ul>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

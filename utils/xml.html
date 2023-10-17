@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>ploigos_step_runner.utils.xml API documentation</title>
 <meta name="description" content="Shared utils for dealing with XML." />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -31,7 +31,6 @@
 Shared utils for dealing with XML.
 &#34;&#34;&#34;
 
-import glob
 import re
 import os.path
 from xml.etree import ElementTree
@@ -49,6 +48,36 @@ def get_xml_element(xml_file, element_name):
     -------
     xml.etree.ElementTree.Element
         The Element matching the given element_name.
+    &#34;&#34;&#34;
+
+    xml_element = get_xml_element_if_present(xml_file, element_name)
+
+    # verify information from xml file
+    if xml_element is None:
+        raise ValueError(&#39;Given xml file (&#39; + \
+             xml_file + \
+             &#39;) does not have ./&#39; + \
+             element_name + \
+             &#39; element&#39; \
+        )
+
+    return xml_element
+
+
+def get_xml_element_if_present(xml_file, element_name):
+    &#34;&#34;&#34; Gets a given element from a given xml file, if the xml file has that element.
+        Otherwise returns None.
+
+    Raises
+    ------
+    ValueError
+        If the given xml_file does not exist.
+
+    Returns
+    -------
+    xml.etree.ElementTree.Element
+        The Element matching the given element_name.
+        Or None if the file does not contain an Element with element_name.
     &#34;&#34;&#34;
 
     # verify runtime config
@@ -69,19 +98,16 @@ def get_xml_element(xml_file, element_name):
     else:
         xml_element = xml_root.find(&#39;./&#39; + xml_namespace + element_name)
 
-    # verify information from xml file
-    if xml_element is None:
-        raise ValueError(&#39;Given xml file (&#39; + \
-             xml_file + \
-             &#39;) does not have ./&#39; + \
-             element_name + \
-             &#39; element&#39; \
-        )
-
     return xml_element
 
-def get_xml_element_by_path(xml_file_path, xpath, default_namespace=None, xml_namespace_dict=None):
-    &#34;&#34;&#34;Gets a given element from a given xml file given an xpath.
+def get_xml_element_by_path(
+    xml_file_path,
+    xpath,
+    default_namespace=None,
+    xml_namespace_dict=None,
+    find_all=False
+):
+    &#34;&#34;&#34;Gets the XML element(s) from a given xml file given an xpath.
 
     Parameters
     ----------
@@ -97,17 +123,20 @@ def get_xml_element_by_path(xml_file_path, xpath, default_namespace=None, xml_na
     xml_namespace_dict : Dict[str, str]
         Optional dictionary if default_namespace is not enough and you have multiple
         namespaces that you need to deal with in your xpath selector.
+    find_all : bool
+        If False find only the first matching Element.
+        If True find all matching elements.
 
     Returns
     -------
-    xml.etree.ElementTree.Element
-        The Element found given the xpath
+    xml.etree.ElementTree.Element or [xml.etree.ElementTree.Element]
+        The Element(s) found given the xpath
     &#34;&#34;&#34;
-
     # verify runtime config
     if not os.path.exists(xml_file_path):
         raise ValueError(f&#39;Given xml file does not exist: {xml_file_path}&#39;)
 
+    # figure out the xml namespaceing
     xml_file = ElementTree.parse(xml_file_path).getroot()
     namespaces = xml_namespace_dict
     if xml_namespace_dict is None and default_namespace is not None:
@@ -116,107 +145,64 @@ def get_xml_element_by_path(xml_file_path, xpath, default_namespace=None, xml_na
         namespaces = {}
         namespaces[default_namespace] = xml_namespace
 
-    if xml_namespace_dict is None and default_namespace is None:
-        return xml_file.find(xpath)
+    # find the element(s)
+    results = None
+    if find_all:
+        results = xml_file.findall(xpath, namespaces)
+    else:
+        results = xml_file.find(xpath, namespaces)
 
-    return xml_file.find(xpath, namespaces)
+    return results
 
-def aggregate_xml_element_attribute_values(xml_file_path, xml_element, attribs): # pylint: disable=too-many-branches
-    &#34;&#34;&#34;
-    Function to parse a XML file looking for a specific element and obtaining its attributes.
-
-    If element is not found in file the file is ignored.
-
-    If attribute is not found in element the file is ignored.
+def get_xml_element_text_by_path(
+    xml_file_path,
+    xpath,
+    default_namespace=None,
+    xml_namespace_dict=None,
+    find_all=False
+):
+    &#34;&#34;&#34;Gets the text of XML element(s) from a given xml file given an xpath.
 
     Parameters
     ----------
-    xml_file_path: str
-        Path to directory containing XML files
-    xml_element: str
-        XML element being searched for
-    attribs: list
-        List of attributes being searched for in the XML element
+    xml_file_path : str
+        Path of the xml file
+    xpath : str
+        Xpath of the element you want
+    default_namespace : str
+        Optional string specifying the default namespace you are using in your xpath selector.
+        This is the most common argument that will most likely be used.
+        If your XML is namespaced, then even if your elements are in the default namespace,
+        you must specify and use this namespace in both your xpath as well as specifying it here.
+    xml_namespace_dict : Dict[str, str]
+        Optional dictionary if default_namespace is not enough and you have multiple
+        namespaces that you need to deal with in your xpath selector.
+    find_all : bool
+        If False find only the first matching Element.
+        If True find all matching elements.
 
     Returns
-    --------
-    report_results: dict
-        A dictionary of attribute values.
-
-    Raises
-    ------
-    ValueError
-        If XML element is not found in file(s)
-
+    -------
+    str or [str]
+        The text of the XML elements found given the xpath
     &#34;&#34;&#34;
+    xml_elements = get_xml_element_by_path(
+        xml_file_path=xml_file_path,
+        xpath=xpath,
+        default_namespace=default_namespace,
+        xml_namespace_dict=xml_namespace_dict,
+        find_all=find_all
+    )
 
-    report_results = {}
+    result = None
+    if find_all:
+        result = []
+        for xml_element in xml_elements:
+            result.append(xml_element.text)
+    else:
+        result = xml_elements.text
 
-    #Search file path for XML files
-
-    if os.path.isdir(xml_file_path):
-        xml_files = glob.glob(xml_file_path + &#39;/*.xml&#39;, recursive=False)
-    elif os.path.isfile(xml_file_path):
-        xml_files = [xml_file_path]
-
-    with open(xml_files[0], &#34;r&#34;) as xml_file:
-        print(&#34;line: &#34; + xml_file.read())
-
-    for attrib in attribs:
-        report_results[attrib] = []
-
-    #Iterate over XML files
-    for file in xml_files:
-        try:
-            pom_element = get_xml_element(file, xml_element)
-            #Add attributes to dictionary
-            for attrib in attribs:
-                attribute_value = pom_element.attrib[attrib]
-                # aggregate attribute accross multiple files
-                report_results[attrib].append(attribute_value)
-        except ValueError:
-            #Return empty dict if an attribute is missing
-            return {}
-
-    #Loop to check if all values aggregated are integers, floats, strings, or a mix
-    #of all three.
-    for attrib in attribs:
-        only_numerics = True
-        only_floats = True
-        #Iteration to determine what pattern all values follow.
-        for value in report_results[attrib]:
-            #isnumeric() returns True if the value contains numbers
-            #but not a decimal point. If this returns
-            #true then continue because the value would be
-            #a valid float anyway
-            if value.isnumeric():
-                continue
-            only_numerics = False
-            try:
-                float(value)
-            except ValueError:
-                only_floats = False
-                #Break since only_numerics and only_floats are both false
-                break
-        if only_floats:
-            aggregated_value = 0
-        else:
-            aggregated_value = []
-        #Iteration to aggregate values based on determined pattern.
-        for value in report_results[attrib]:
-            #If a value is numeric and can be a float then it is an integer
-            if only_numerics:
-                aggregated_value = int(aggregated_value) + int(value)
-            #If a value is not numeric but can be a float then it is a float
-            elif only_floats:
-                aggregated_value = float(aggregated_value) + float(value)
-            else:
-                aggregated_value.append(value)
-        #Replace list of values with aggregated value that is either an int,
-        #float, or string
-        report_results[attrib] = aggregated_value
-
-    return report_results</code></pre>
+    return result</code></pre>
 </details>
 </section>
 <section>
@@ -226,134 +212,6 @@ def aggregate_xml_element_attribute_values(xml_file_path, xml_element, attribs):
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="ploigos_step_runner.utils.xml.aggregate_xml_element_attribute_values"><code class="name flex">
-<span>def <span class="ident">aggregate_xml_element_attribute_values</span></span>(<span>xml_file_path, xml_element, attribs)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Function to parse a XML file looking for a specific element and obtaining its attributes.</p>
-<p>If element is not found in file the file is ignored.</p>
-<p>If attribute is not found in element the file is ignored.</p>
-<h2 id="parameters">Parameters</h2>
-<dl>
-<dt><strong><code>xml_file_path</code></strong> :&ensp;<code>str</code></dt>
-<dd>Path to directory containing XML files</dd>
-<dt><strong><code>xml_element</code></strong> :&ensp;<code>str</code></dt>
-<dd>XML element being searched for</dd>
-<dt><strong><code>attribs</code></strong> :&ensp;<code>list</code></dt>
-<dd>List of attributes being searched for in the XML element</dd>
-</dl>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><strong><code>report_results</code></strong> :&ensp;<code>dict</code></dt>
-<dd>A dictionary of attribute values.</dd>
-</dl>
-<h2 id="raises">Raises</h2>
-<dl>
-<dt><code>ValueError</code></dt>
-<dd>If XML element is not found in file(s)</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def aggregate_xml_element_attribute_values(xml_file_path, xml_element, attribs): # pylint: disable=too-many-branches
-    &#34;&#34;&#34;
-    Function to parse a XML file looking for a specific element and obtaining its attributes.
-
-    If element is not found in file the file is ignored.
-
-    If attribute is not found in element the file is ignored.
-
-    Parameters
-    ----------
-    xml_file_path: str
-        Path to directory containing XML files
-    xml_element: str
-        XML element being searched for
-    attribs: list
-        List of attributes being searched for in the XML element
-
-    Returns
-    --------
-    report_results: dict
-        A dictionary of attribute values.
-
-    Raises
-    ------
-    ValueError
-        If XML element is not found in file(s)
-
-    &#34;&#34;&#34;
-
-    report_results = {}
-
-    #Search file path for XML files
-
-    if os.path.isdir(xml_file_path):
-        xml_files = glob.glob(xml_file_path + &#39;/*.xml&#39;, recursive=False)
-    elif os.path.isfile(xml_file_path):
-        xml_files = [xml_file_path]
-
-    with open(xml_files[0], &#34;r&#34;) as xml_file:
-        print(&#34;line: &#34; + xml_file.read())
-
-    for attrib in attribs:
-        report_results[attrib] = []
-
-    #Iterate over XML files
-    for file in xml_files:
-        try:
-            pom_element = get_xml_element(file, xml_element)
-            #Add attributes to dictionary
-            for attrib in attribs:
-                attribute_value = pom_element.attrib[attrib]
-                # aggregate attribute accross multiple files
-                report_results[attrib].append(attribute_value)
-        except ValueError:
-            #Return empty dict if an attribute is missing
-            return {}
-
-    #Loop to check if all values aggregated are integers, floats, strings, or a mix
-    #of all three.
-    for attrib in attribs:
-        only_numerics = True
-        only_floats = True
-        #Iteration to determine what pattern all values follow.
-        for value in report_results[attrib]:
-            #isnumeric() returns True if the value contains numbers
-            #but not a decimal point. If this returns
-            #true then continue because the value would be
-            #a valid float anyway
-            if value.isnumeric():
-                continue
-            only_numerics = False
-            try:
-                float(value)
-            except ValueError:
-                only_floats = False
-                #Break since only_numerics and only_floats are both false
-                break
-        if only_floats:
-            aggregated_value = 0
-        else:
-            aggregated_value = []
-        #Iteration to aggregate values based on determined pattern.
-        for value in report_results[attrib]:
-            #If a value is numeric and can be a float then it is an integer
-            if only_numerics:
-                aggregated_value = int(aggregated_value) + int(value)
-            #If a value is not numeric but can be a float then it is a float
-            elif only_floats:
-                aggregated_value = float(aggregated_value) + float(value)
-            else:
-                aggregated_value.append(value)
-        #Replace list of values with aggregated value that is either an int,
-        #float, or string
-        report_results[attrib] = aggregated_value
-
-    return report_results</code></pre>
-</details>
-</dd>
 <dt id="ploigos_step_runner.utils.xml.get_xml_element"><code class="name flex">
 <span>def <span class="ident">get_xml_element</span></span>(<span>xml_file, element_name)</span>
 </code></dt>
@@ -389,6 +247,144 @@ If the given xml_file does not contain an element with the given element_name.</
         The Element matching the given element_name.
     &#34;&#34;&#34;
 
+    xml_element = get_xml_element_if_present(xml_file, element_name)
+
+    # verify information from xml file
+    if xml_element is None:
+        raise ValueError(&#39;Given xml file (&#39; + \
+             xml_file + \
+             &#39;) does not have ./&#39; + \
+             element_name + \
+             &#39; element&#39; \
+        )
+
+    return xml_element</code></pre>
+</details>
+</dd>
+<dt id="ploigos_step_runner.utils.xml.get_xml_element_by_path"><code class="name flex">
+<span>def <span class="ident">get_xml_element_by_path</span></span>(<span>xml_file_path, xpath, default_namespace=None, xml_namespace_dict=None, find_all=False)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Gets the XML element(s) from a given xml file given an xpath.</p>
+<h2 id="parameters">Parameters</h2>
+<dl>
+<dt><strong><code>xml_file_path</code></strong> :&ensp;<code>str</code></dt>
+<dd>Path of the xml file</dd>
+<dt><strong><code>xpath</code></strong> :&ensp;<code>str</code></dt>
+<dd>Xpath of the element you want</dd>
+<dt><strong><code>default_namespace</code></strong> :&ensp;<code>str</code></dt>
+<dd>Optional string specifying the default namespace you are using in your xpath selector.
+This is the most common argument that will most likely be used.
+If your XML is namespaced, then even if your elements are in the default namespace,
+you must specify and use this namespace in both your xpath as well as specifying it here.</dd>
+<dt><strong><code>xml_namespace_dict</code></strong> :&ensp;<code>Dict[str, str]</code></dt>
+<dd>Optional dictionary if default_namespace is not enough and you have multiple
+namespaces that you need to deal with in your xpath selector.</dd>
+<dt><strong><code>find_all</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If False find only the first matching Element.
+If True find all matching elements.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>xml.etree.ElementTree.Element</code> or <code>[xml.etree.ElementTree.Element]</code></dt>
+<dd>The Element(s) found given the xpath</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_xml_element_by_path(
+    xml_file_path,
+    xpath,
+    default_namespace=None,
+    xml_namespace_dict=None,
+    find_all=False
+):
+    &#34;&#34;&#34;Gets the XML element(s) from a given xml file given an xpath.
+
+    Parameters
+    ----------
+    xml_file_path : str
+        Path of the xml file
+    xpath : str
+        Xpath of the element you want
+    default_namespace : str
+        Optional string specifying the default namespace you are using in your xpath selector.
+        This is the most common argument that will most likely be used.
+        If your XML is namespaced, then even if your elements are in the default namespace,
+        you must specify and use this namespace in both your xpath as well as specifying it here.
+    xml_namespace_dict : Dict[str, str]
+        Optional dictionary if default_namespace is not enough and you have multiple
+        namespaces that you need to deal with in your xpath selector.
+    find_all : bool
+        If False find only the first matching Element.
+        If True find all matching elements.
+
+    Returns
+    -------
+    xml.etree.ElementTree.Element or [xml.etree.ElementTree.Element]
+        The Element(s) found given the xpath
+    &#34;&#34;&#34;
+    # verify runtime config
+    if not os.path.exists(xml_file_path):
+        raise ValueError(f&#39;Given xml file does not exist: {xml_file_path}&#39;)
+
+    # figure out the xml namespaceing
+    xml_file = ElementTree.parse(xml_file_path).getroot()
+    namespaces = xml_namespace_dict
+    if xml_namespace_dict is None and default_namespace is not None:
+        xml_namespace_match = re.findall(r&#39;{(.*?)}&#39;, xml_file.tag)
+        xml_namespace = xml_namespace_match[0] if xml_namespace_match else &#39;&#39;
+        namespaces = {}
+        namespaces[default_namespace] = xml_namespace
+
+    # find the element(s)
+    results = None
+    if find_all:
+        results = xml_file.findall(xpath, namespaces)
+    else:
+        results = xml_file.find(xpath, namespaces)
+
+    return results</code></pre>
+</details>
+</dd>
+<dt id="ploigos_step_runner.utils.xml.get_xml_element_if_present"><code class="name flex">
+<span>def <span class="ident">get_xml_element_if_present</span></span>(<span>xml_file, element_name)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Gets a given element from a given xml file, if the xml file has that element.
+Otherwise returns None.</p>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>ValueError</code></dt>
+<dd>If the given xml_file does not exist.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>xml.etree.ElementTree.Element</code></dt>
+<dd>The Element matching the given element_name.
+Or None if the file does not contain an Element with element_name.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_xml_element_if_present(xml_file, element_name):
+    &#34;&#34;&#34; Gets a given element from a given xml file, if the xml file has that element.
+        Otherwise returns None.
+
+    Raises
+    ------
+    ValueError
+        If the given xml_file does not exist.
+
+    Returns
+    -------
+    xml.etree.ElementTree.Element
+        The Element matching the given element_name.
+        Or None if the file does not contain an Element with element_name.
+    &#34;&#34;&#34;
+
     # verify runtime config
     if not os.path.exists(xml_file):
         raise ValueError(&#39;Given xml file does not exist: &#39; + xml_file)
@@ -407,23 +403,14 @@ If the given xml_file does not contain an element with the given element_name.</
     else:
         xml_element = xml_root.find(&#39;./&#39; + xml_namespace + element_name)
 
-    # verify information from xml file
-    if xml_element is None:
-        raise ValueError(&#39;Given xml file (&#39; + \
-             xml_file + \
-             &#39;) does not have ./&#39; + \
-             element_name + \
-             &#39; element&#39; \
-        )
-
     return xml_element</code></pre>
 </details>
 </dd>
-<dt id="ploigos_step_runner.utils.xml.get_xml_element_by_path"><code class="name flex">
-<span>def <span class="ident">get_xml_element_by_path</span></span>(<span>xml_file_path, xpath, default_namespace=None, xml_namespace_dict=None)</span>
+<dt id="ploigos_step_runner.utils.xml.get_xml_element_text_by_path"><code class="name flex">
+<span>def <span class="ident">get_xml_element_text_by_path</span></span>(<span>xml_file_path, xpath, default_namespace=None, xml_namespace_dict=None, find_all=False)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Gets a given element from a given xml file given an xpath.</p>
+<div class="desc"><p>Gets the text of XML element(s) from a given xml file given an xpath.</p>
 <h2 id="parameters">Parameters</h2>
 <dl>
 <dt><strong><code>xml_file_path</code></strong> :&ensp;<code>str</code></dt>
@@ -438,18 +425,27 @@ you must specify and use this namespace in both your xpath as well as specifying
 <dt><strong><code>xml_namespace_dict</code></strong> :&ensp;<code>Dict[str, str]</code></dt>
 <dd>Optional dictionary if default_namespace is not enough and you have multiple
 namespaces that you need to deal with in your xpath selector.</dd>
+<dt><strong><code>find_all</code></strong> :&ensp;<code>bool</code></dt>
+<dd>If False find only the first matching Element.
+If True find all matching elements.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>xml.etree.ElementTree.Element</code></dt>
-<dd>The Element found given the xpath</dd>
+<dt><code>str</code> or <code>[str]</code></dt>
+<dd>The text of the XML elements found given the xpath</dd>
 </dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def get_xml_element_by_path(xml_file_path, xpath, default_namespace=None, xml_namespace_dict=None):
-    &#34;&#34;&#34;Gets a given element from a given xml file given an xpath.
+<pre><code class="python">def get_xml_element_text_by_path(
+    xml_file_path,
+    xpath,
+    default_namespace=None,
+    xml_namespace_dict=None,
+    find_all=False
+):
+    &#34;&#34;&#34;Gets the text of XML element(s) from a given xml file given an xpath.
 
     Parameters
     ----------
@@ -465,29 +461,32 @@ namespaces that you need to deal with in your xpath selector.</dd>
     xml_namespace_dict : Dict[str, str]
         Optional dictionary if default_namespace is not enough and you have multiple
         namespaces that you need to deal with in your xpath selector.
+    find_all : bool
+        If False find only the first matching Element.
+        If True find all matching elements.
 
     Returns
     -------
-    xml.etree.ElementTree.Element
-        The Element found given the xpath
+    str or [str]
+        The text of the XML elements found given the xpath
     &#34;&#34;&#34;
+    xml_elements = get_xml_element_by_path(
+        xml_file_path=xml_file_path,
+        xpath=xpath,
+        default_namespace=default_namespace,
+        xml_namespace_dict=xml_namespace_dict,
+        find_all=find_all
+    )
 
-    # verify runtime config
-    if not os.path.exists(xml_file_path):
-        raise ValueError(f&#39;Given xml file does not exist: {xml_file_path}&#39;)
+    result = None
+    if find_all:
+        result = []
+        for xml_element in xml_elements:
+            result.append(xml_element.text)
+    else:
+        result = xml_elements.text
 
-    xml_file = ElementTree.parse(xml_file_path).getroot()
-    namespaces = xml_namespace_dict
-    if xml_namespace_dict is None and default_namespace is not None:
-        xml_namespace_match = re.findall(r&#39;{(.*?)}&#39;, xml_file.tag)
-        xml_namespace = xml_namespace_match[0] if xml_namespace_match else &#39;&#39;
-        namespaces = {}
-        namespaces[default_namespace] = xml_namespace
-
-    if xml_namespace_dict is None and default_namespace is None:
-        return xml_file.find(xpath)
-
-    return xml_file.find(xpath, namespaces)</code></pre>
+    return result</code></pre>
 </details>
 </dd>
 </dl>
@@ -508,16 +507,17 @@ namespaces that you need to deal with in your xpath selector.</dd>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="ploigos_step_runner.utils.xml.aggregate_xml_element_attribute_values" href="#ploigos_step_runner.utils.xml.aggregate_xml_element_attribute_values">aggregate_xml_element_attribute_values</a></code></li>
 <li><code><a title="ploigos_step_runner.utils.xml.get_xml_element" href="#ploigos_step_runner.utils.xml.get_xml_element">get_xml_element</a></code></li>
 <li><code><a title="ploigos_step_runner.utils.xml.get_xml_element_by_path" href="#ploigos_step_runner.utils.xml.get_xml_element_by_path">get_xml_element_by_path</a></code></li>
+<li><code><a title="ploigos_step_runner.utils.xml.get_xml_element_if_present" href="#ploigos_step_runner.utils.xml.get_xml_element_if_present">get_xml_element_if_present</a></code></li>
+<li><code><a title="ploigos_step_runner.utils.xml.get_xml_element_text_by_path" href="#ploigos_step_runner.utils.xml.get_xml_element_text_by_path">get_xml_element_text_by_path</a></code></li>
 </ul>
 </li>
 </ul>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

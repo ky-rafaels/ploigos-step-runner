@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>ploigos_step_runner.config.sub_step_config API documentation</title>
 <meta name="description" content="Representation of a sub step configuration." />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -51,6 +51,9 @@ class SubStepConfig:
         Configuration specific to this sub step.
     sub_step_env_config : dict, optional
         Environment specific configuration specific to this sub step.
+    sub_step_contine_sub_steps_on_failure : bool
+        True to continue executing other sub steps in current step if this sub step fails.
+        False to fail all step execution if this sub step fails.
 
     Attributes
     ----------
@@ -62,16 +65,19 @@ class SubStepConfig:
     &#34;&#34;&#34;
 
     def __init__( # pylint: disable=too-many-arguments
-            self,
-            parent_step_config,
-            sub_step_name,
-            sub_step_implementer_name,
-            sub_step_config_dict=None,
-            sub_step_env_config=None):
+        self,
+        parent_step_config,
+        sub_step_name,
+        sub_step_implementer_name,
+        sub_step_config_dict=None,
+        sub_step_env_config=None,
+        sub_step_contine_sub_steps_on_failure=False
+    ):
 
         self.__parent_step_config = parent_step_config
         self.__sub_step_name = sub_step_name
         self.__sub_step_implementer_name = sub_step_implementer_name
+        self.__sub_step_contine_sub_steps_on_failure = sub_step_contine_sub_steps_on_failure
 
         if sub_step_config_dict is None:
             sub_step_config_dict = {}
@@ -175,6 +181,19 @@ class SubStepConfig:
             The environment specific configuration for all environments for this sub step.
         &#34;&#34;&#34;
         return copy.deepcopy(self.__sub_step_env_config)
+
+    @property
+    def sub_step_contine_sub_steps_on_failure(self):
+        &#34;&#34;&#34;Gets whether to continue executing other sub steps that belong to the step that
+        this sub step belongs to or not if this sub step fails.
+
+        Returns
+        -------
+        bool
+            True to continue executing other sub steps in current step if this sub step fails.
+            False to fail all step execution if this sub step fails.
+        &#34;&#34;&#34;
+        return self.__sub_step_contine_sub_steps_on_failure
 
     def get_global_environment_defaults(self, env):
         &#34;&#34;&#34;Convince function for getting the global environment defaults from the parent config.
@@ -310,7 +329,7 @@ class SubStepConfig:
             if isinstance(runtime_step_config[key], ConfigValue):
                 value = runtime_step_config[key].value
             else:
-                value = copy.deepcopy(runtime_step_config[key])
+                value = ConfigValue.convert_leaves_to_values(runtime_step_config[key])
         else:
             value = None
 
@@ -405,7 +424,7 @@ class SubStepConfig:
 <dl>
 <dt id="ploigos_step_runner.config.sub_step_config.SubStepConfig"><code class="flex name class">
 <span>class <span class="ident">SubStepConfig</span></span>
-<span>(</span><span>parent_step_config, sub_step_name, sub_step_implementer_name, sub_step_config_dict=None, sub_step_env_config=None)</span>
+<span>(</span><span>parent_step_config, sub_step_name, sub_step_implementer_name, sub_step_config_dict=None, sub_step_env_config=None, sub_step_contine_sub_steps_on_failure=False)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Representation of a sub step configuration.</p>
@@ -421,6 +440,9 @@ class SubStepConfig:
 <dd>Configuration specific to this sub step.</dd>
 <dt><strong><code>sub_step_env_config</code></strong> :&ensp;<code>dict</code>, optional</dt>
 <dd>Environment specific configuration specific to this sub step.</dd>
+<dt><strong><code>sub_step_contine_sub_steps_on_failure</code></strong> :&ensp;<code>bool</code></dt>
+<dd>True to continue executing other sub steps in current step if this sub step fails.
+False to fail all step execution if this sub step fails.</dd>
 </dl>
 <h2 id="attributes">Attributes</h2>
 <dl>
@@ -454,6 +476,9 @@ class SubStepConfig:
         Configuration specific to this sub step.
     sub_step_env_config : dict, optional
         Environment specific configuration specific to this sub step.
+    sub_step_contine_sub_steps_on_failure : bool
+        True to continue executing other sub steps in current step if this sub step fails.
+        False to fail all step execution if this sub step fails.
 
     Attributes
     ----------
@@ -465,16 +490,19 @@ class SubStepConfig:
     &#34;&#34;&#34;
 
     def __init__( # pylint: disable=too-many-arguments
-            self,
-            parent_step_config,
-            sub_step_name,
-            sub_step_implementer_name,
-            sub_step_config_dict=None,
-            sub_step_env_config=None):
+        self,
+        parent_step_config,
+        sub_step_name,
+        sub_step_implementer_name,
+        sub_step_config_dict=None,
+        sub_step_env_config=None,
+        sub_step_contine_sub_steps_on_failure=False
+    ):
 
         self.__parent_step_config = parent_step_config
         self.__sub_step_name = sub_step_name
         self.__sub_step_implementer_name = sub_step_implementer_name
+        self.__sub_step_contine_sub_steps_on_failure = sub_step_contine_sub_steps_on_failure
 
         if sub_step_config_dict is None:
             sub_step_config_dict = {}
@@ -578,6 +606,19 @@ class SubStepConfig:
             The environment specific configuration for all environments for this sub step.
         &#34;&#34;&#34;
         return copy.deepcopy(self.__sub_step_env_config)
+
+    @property
+    def sub_step_contine_sub_steps_on_failure(self):
+        &#34;&#34;&#34;Gets whether to continue executing other sub steps that belong to the step that
+        this sub step belongs to or not if this sub step fails.
+
+        Returns
+        -------
+        bool
+            True to continue executing other sub steps in current step if this sub step fails.
+            False to fail all step execution if this sub step fails.
+        &#34;&#34;&#34;
+        return self.__sub_step_contine_sub_steps_on_failure
 
     def get_global_environment_defaults(self, env):
         &#34;&#34;&#34;Convince function for getting the global environment defaults from the parent config.
@@ -713,7 +754,7 @@ class SubStepConfig:
             if isinstance(runtime_step_config[key], ConfigValue):
                 value = runtime_step_config[key].value
             else:
-                value = copy.deepcopy(runtime_step_config[key])
+                value = ConfigValue.convert_leaves_to_values(runtime_step_config[key])
         else:
             value = None
 
@@ -938,6 +979,34 @@ def sub_step_config(self):
     return copy.deepcopy(self.__sub_step_config_dict)</code></pre>
 </details>
 </dd>
+<dt id="ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_contine_sub_steps_on_failure"><code class="name">var <span class="ident">sub_step_contine_sub_steps_on_failure</span></code></dt>
+<dd>
+<div class="desc"><p>Gets whether to continue executing other sub steps that belong to the step that
+this sub step belongs to or not if this sub step fails.</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>bool</code></dt>
+<dd>True to continue executing other sub steps in current step if this sub step fails.
+False to fail all step execution if this sub step fails.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def sub_step_contine_sub_steps_on_failure(self):
+    &#34;&#34;&#34;Gets whether to continue executing other sub steps that belong to the step that
+    this sub step belongs to or not if this sub step fails.
+
+    Returns
+    -------
+    bool
+        True to continue executing other sub steps in current step if this sub step fails.
+        False to fail all step execution if this sub step fails.
+    &#34;&#34;&#34;
+    return self.__sub_step_contine_sub_steps_on_failure</code></pre>
+</details>
+</dd>
 <dt id="ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_env_config"><code class="name">var <span class="ident">sub_step_env_config</span></code></dt>
 <dd>
 <div class="desc"><p>Gets the environment specific configuration for all environments for this sub step.</p>
@@ -1086,7 +1155,7 @@ for this sub step in the given context with the given defaults.</dd>
         if isinstance(runtime_step_config[key], ConfigValue):
             value = runtime_step_config[key].value
         else:
-            value = copy.deepcopy(runtime_step_config[key])
+            value = ConfigValue.convert_leaves_to_values(runtime_step_config[key])
     else:
         value = None
 
@@ -1373,6 +1442,7 @@ existing sub step environment configuration.</dd>
 <li><code><a title="ploigos_step_runner.config.sub_step_config.SubStepConfig.step_config_overrides" href="#ploigos_step_runner.config.sub_step_config.SubStepConfig.step_config_overrides">step_config_overrides</a></code></li>
 <li><code><a title="ploigos_step_runner.config.sub_step_config.SubStepConfig.step_name" href="#ploigos_step_runner.config.sub_step_config.SubStepConfig.step_name">step_name</a></code></li>
 <li><code><a title="ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_config" href="#ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_config">sub_step_config</a></code></li>
+<li><code><a title="ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_contine_sub_steps_on_failure" href="#ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_contine_sub_steps_on_failure">sub_step_contine_sub_steps_on_failure</a></code></li>
 <li><code><a title="ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_env_config" href="#ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_env_config">sub_step_env_config</a></code></li>
 <li><code><a title="ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_implementer_name" href="#ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_implementer_name">sub_step_implementer_name</a></code></li>
 <li><code><a title="ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_name" href="#ploigos_step_runner.config.sub_step_config.SubStepConfig.sub_step_name">sub_step_name</a></code></li>
@@ -1384,7 +1454,7 @@ existing sub step environment configuration.</dd>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

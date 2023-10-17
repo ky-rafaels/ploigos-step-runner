@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>ploigos_step_runner.step_implementers.report.result_artifacts_archive API documentation</title>
 <meta name="description" content="`StepImplementer` for the `report` step which builds and pushes and artifacts archive …" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -201,9 +201,11 @@ Result Artifact Key              | Description
 import json
 import os
 import pprint
+import re
 import shutil
 
-from ploigos_step_runner import StepImplementer, StepResult
+from ploigos_step_runner.step_implementer import StepImplementer
+from ploigos_step_runner.results import StepResult
 from ploigos_step_runner.utils.file import upload_file
 
 DEFAULT_CONFIG = {
@@ -363,9 +365,10 @@ class ResultArtifactsArchive(StepImplementer):
                         if os.path.isfile(artifact.value):
                             shutil.copy(artifact.value, results_archive_artifact_dir_path)
                         elif os.path.isdir(artifact.value):
+                            basename = self.__basename_of_dir(artifact.value)
                             dest_path = os.path.join(
                                 results_archive_artifact_dir_path,
-                                os.path.basename(artifact.value)
+                                basename
                             )
                             shutil.copytree(artifact.value, dest_path)
                     else:
@@ -392,7 +395,7 @@ class ResultArtifactsArchive(StepImplementer):
                             artifact.name
                         )
 
-                        with open(results_archive_artifact_file_path, &#39;w&#39;) \
+                        with open(results_archive_artifact_file_path, &#39;w&#39;, encoding=&#39;utf-8&#39;) \
                                 as results_archive_artifact_file:
                             # format the data to print to file based on its type
                             if isinstance(artifact.value, str):
@@ -421,7 +424,17 @@ class ResultArtifactsArchive(StepImplementer):
         else:
             results_artifacts_archive = None
 
-        return results_artifacts_archive</code></pre>
+        return results_artifacts_archive
+
+    @staticmethod
+    def __basename_of_dir(absolute_path):
+        &#34;&#34;&#34;
+        Returns the name of the directory without any parent directories or slashes.
+        __basename_of_dir(&#39;/foo/bar/&#39;) returns &#39;bar&#39;.
+        This is useful because os.path.basename(&#39;/foo/bar/&#39;) returns &#39;&#39;.
+        &#34;&#34;&#34;
+        no_trailing_slash = re.sub(f&#39;{os.path.sep}$&#39;, &#39;&#39;, absolute_path)
+        return os.path.basename(no_trailing_slash)</code></pre>
 </details>
 </section>
 <section>
@@ -585,9 +598,10 @@ class ResultArtifactsArchive(StepImplementer):
                         if os.path.isfile(artifact.value):
                             shutil.copy(artifact.value, results_archive_artifact_dir_path)
                         elif os.path.isdir(artifact.value):
+                            basename = self.__basename_of_dir(artifact.value)
                             dest_path = os.path.join(
                                 results_archive_artifact_dir_path,
-                                os.path.basename(artifact.value)
+                                basename
                             )
                             shutil.copytree(artifact.value, dest_path)
                     else:
@@ -614,7 +628,7 @@ class ResultArtifactsArchive(StepImplementer):
                             artifact.name
                         )
 
-                        with open(results_archive_artifact_file_path, &#39;w&#39;) \
+                        with open(results_archive_artifact_file_path, &#39;w&#39;, encoding=&#39;utf-8&#39;) \
                                 as results_archive_artifact_file:
                             # format the data to print to file based on its type
                             if isinstance(artifact.value, str):
@@ -643,7 +657,17 @@ class ResultArtifactsArchive(StepImplementer):
         else:
             results_artifacts_archive = None
 
-        return results_artifacts_archive</code></pre>
+        return results_artifacts_archive
+
+    @staticmethod
+    def __basename_of_dir(absolute_path):
+        &#34;&#34;&#34;
+        Returns the name of the directory without any parent directories or slashes.
+        __basename_of_dir(&#39;/foo/bar/&#39;) returns &#39;bar&#39;.
+        This is useful because os.path.basename(&#39;/foo/bar/&#39;) returns &#39;&#39;.
+        &#34;&#34;&#34;
+        no_trailing_slash = re.sub(f&#39;{os.path.sep}$&#39;, &#39;&#39;, absolute_path)
+        return os.path.basename(no_trailing_slash)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -707,7 +731,7 @@ class ResultArtifactsArchive(StepImplementer):
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

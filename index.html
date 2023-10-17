@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>ploigos_step_runner API documentation</title>
 <meta name="description" content="Ploigos Step Runner (psr) main entry point …" />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -61,6 +61,7 @@
 <li>uat</li>
 <li>runtime-vulnerability-scan</li>
 <li>canary-test</li>
+<li>undeploy</li>
 <li>report</li>
 <li>publish-workflow-results</li>
 <li>automated-governance</li>
@@ -75,7 +76,7 @@
      (step-runner-config.{STEP_NAME}.environment-config.{ENVIRONMENT_NAME})
 6. Step Configuration Runtime Overrides (--environment arugment to main entry point)
 </code></pre>
-<p><strong> Example 1 </strong></p>
+<p>** Example 1 **</p>
 <pre><code>---
 step-runner-config:
   # List of decryptors to use to decrypt any encrypted configuration.
@@ -129,6 +130,9 @@ step-runner-config:
   - implementer: SampleStep1Implementer1
     config:
       sample-config-option-3: 'value for sample-config-option-3 for use in this step'
+      additional-artifacts-dirs:
+      - name: sample-user-supplied-artifact
+        path: sample/path/to/user/supplied/artifact
     environment-config:
       SAMPLE-ENV-1:
         sample-config-option-4: 'value for use in this step in SAMPLE-ENV-1 environment'
@@ -140,7 +144,7 @@ step-runner-config:
 <p class="admonition-title">Note</p>
 <p>Optional step configurations are listed commented out and with their default values.</p>
 </div>
-<p><strong> Example Config file for a Maven built Application </strong></p>
+<p>** Example Config file for a Maven built Application **</p>
 <pre><code>---
 step-runner-config:
   # Optional
@@ -293,7 +297,7 @@ step-runner-config:
   - implementer: Git
     config: {
       # Optional.
-      #repo-root: './'
+      #git-repo-root: './'
 
       # Optional.
       #build-string-length: 7
@@ -334,17 +338,30 @@ step-runner-config:
     }
 
   unit-test:
-  - implementer: Maven
+  - implementer: MavenTest
     config: {
       # Optional.
-      # fail-on-no-tests: true
+      # pom_file: 'pom.xml'
 
       # Optional.
-      # pom_file: 'pom.xml'
+      # tls-verify: True
+
+      # Optional.
+      # maven-profiles: []
+
+      # Optional.
+      # maven-no-transfer-progress: True
+
+      # Optional.
+      # maven-additional-arguments: []
+
+      # Optional.
+      # NOTE: Will attempt to dynamically determine from pom if not given.
+      # test-reports-dir: 'target/surefire-reports
     }
 
   package:
-  - implementer: Maven
+  - implementer: MavenPackage
     config: {
       # Optional.
       #pom-file: 'pom.xml'
@@ -357,7 +374,7 @@ step-runner-config:
     }
 
   push-artifacts:
-  - implementer: Maven
+  - implementer: MavenDeploy
     config: {
       # Required.
       # URL to the artifact repository to push the artifact to.
@@ -517,13 +534,41 @@ step-runner-config:
     }
 
   uat:
-  - implementer: MavenSeleniumCucumber
-    config: {}
+  - implementer: MavenIntegrationTest
+    config:
+      target-host-url-maven-argument-name: 'target.base.url'
+      maven-additional-arguments:
+      - -Dselenium.hub.url=&lt;http://selenium.plogios.xyz:4242&gt;
 
-  # TODO: not yet implemented
-  report: []
+      # Optional.
+      # pom_file: 'pom.xml'
+
+      # Optional.
+      # tls-verify: True
+
+      # Optional.
+      # maven-profiles: []
+
+      # Optional.
+      # maven-no-transfer-progress: True
+
+      # Optional.
+      # maven-additional-arguments: []
+
+      # Optional.
+      # NOTE: Will attempt to dynamically determine from pom if not given.
+      # test-reports-dir: 'target/surefire-reports
+
+  report:
+  - implementer: ResultArtifactsArchive
+    config:
+      results-archive-destination-url: &lt;https://artifact-repo.plogios.com/release-engineering-workflow-result-artifacts-archives/&gt;
+      results-archive-destination-username: mock-name
+
+      # NOTE: should encrypt this
+      results-archive-destination-password: mock-pass
 </code></pre>
-<p><strong> Example Config file for a NPM built Application </strong></p>
+<p>** Example Config file for a NPM built Application **</p>
 <pre><code>---
 step-runner-config:
   # Optional
@@ -637,7 +682,7 @@ step-runner-config:
   - implementer: Git
     config: {
       # Optional.
-      #repo-root: './'
+      #git-repo-root: './'
 
       # Optional.
       #build-string-length: 7
@@ -683,9 +728,24 @@ step-runner-config:
     config: {}
 
   unit-test:
-  # WARNING: not yet implemented
-  - implementer: NPM
-    config: {}
+  - implementer: NpmXunitTest
+    config:
+      test-reports-dir: test_results
+
+      # Optional.
+      # npm-envs:
+      #   ENV_VAR1: VALUE1
+      #   ENV_VAR2: VALUE2
+
+      # Optional.
+      #npm-test-script: test
+
+  - implementer: NpmTest
+    config:
+      # Optional.
+      # npm-envs:
+      #   ENV_VAR1: VALUE1
+      #   ENV_VAR2: VALUE2
 
   push-artifacts:
   # WARNING: not yet implemented
@@ -833,11 +893,29 @@ step-runner-config:
       readiness-probe-path: ''
 
   uat:
-  - implementer: MavenSeleniumCucumber
-    config: {}
+  - implementer: NpmXunitIntegrationTest
+    config:
+      target-host-env-var-name: APP_ROUTE
+      test-reports-dir: uat-reports
 
-  # TODO: not yet implemented
-  report: []
+      # Optional.
+      # npm-test-script: test:uat
+
+      # Optional.
+      # npm-envs:
+      #   WEB_DRIVER_URL: &lt;http://selenium-grid.devsecops:4444/wd/hub&gt;
+      #   BROWSER: chrome
+      #   USER1: test1
+      #   USER2: test2
+
+  report:
+  - implementer: ResultArtifactsArchive
+    config:
+      results-archive-destination-url: &lt;https://artifact-repo.plogios.com/release-engineering-workflow-result-artifacts-archives/&gt;
+      results-archive-destination-username: mock-name
+
+      # NOTE: should encrypt this
+      results-archive-destination-password: mock-pass
 </code></pre>
 <h2 id="examples">Examples</h2>
 <p>Getting Help</p>
@@ -896,6 +974,7 @@ Step Configuration
 * uat
 * runtime-vulnerability-scan
 * canary-test
+* undeploy
 * report
 * publish-workflow-results
 * automated-governance
@@ -967,6 +1046,9 @@ From least precedence to highest precedence.
       - implementer: SampleStep1Implementer1
         config:
           sample-config-option-3: &#39;value for sample-config-option-3 for use in this step&#39;
+          additional-artifacts-dirs:
+          - name: sample-user-supplied-artifact
+            path: sample/path/to/user/supplied/artifact
         environment-config:
           SAMPLE-ENV-1:
             sample-config-option-4: &#39;value for use in this step in SAMPLE-ENV-1 environment&#39;
@@ -1132,7 +1214,7 @@ From least precedence to highest precedence.
       - implementer: Git
         config: {
           # Optional.
-          #repo-root: &#39;./&#39;
+          #git-repo-root: &#39;./&#39;
 
           # Optional.
           #build-string-length: 7
@@ -1173,17 +1255,30 @@ From least precedence to highest precedence.
         }
 
       unit-test:
-      - implementer: Maven
+      - implementer: MavenTest
         config: {
           # Optional.
-          # fail-on-no-tests: true
+          # pom_file: &#39;pom.xml&#39;
 
           # Optional.
-          # pom_file: &#39;pom.xml&#39;
+          # tls-verify: True
+
+          # Optional.
+          # maven-profiles: []
+
+          # Optional.
+          # maven-no-transfer-progress: True
+
+          # Optional.
+          # maven-additional-arguments: []
+
+          # Optional.
+          # NOTE: Will attempt to dynamically determine from pom if not given.
+          # test-reports-dir: &#39;target/surefire-reports
         }
 
       package:
-      - implementer: Maven
+      - implementer: MavenPackage
         config: {
           # Optional.
           #pom-file: &#39;pom.xml&#39;
@@ -1196,7 +1291,7 @@ From least precedence to highest precedence.
         }
 
       push-artifacts:
-      - implementer: Maven
+      - implementer: MavenDeploy
         config: {
           # Required.
           # URL to the artifact repository to push the artifact to.
@@ -1356,11 +1451,39 @@ From least precedence to highest precedence.
         }
 
       uat:
-      - implementer: MavenSeleniumCucumber
-        config: {}
+      - implementer: MavenIntegrationTest
+        config:
+          target-host-url-maven-argument-name: &#39;target.base.url&#39;
+          maven-additional-arguments:
+          - -Dselenium.hub.url=http://selenium.plogios.xyz:4242
 
-      # TODO: not yet implemented
-      report: []
+          # Optional.
+          # pom_file: &#39;pom.xml&#39;
+
+          # Optional.
+          # tls-verify: True
+
+          # Optional.
+          # maven-profiles: []
+
+          # Optional.
+          # maven-no-transfer-progress: True
+
+          # Optional.
+          # maven-additional-arguments: []
+
+          # Optional.
+          # NOTE: Will attempt to dynamically determine from pom if not given.
+          # test-reports-dir: &#39;target/surefire-reports
+
+      report:
+      - implementer: ResultArtifactsArchive
+        config:
+          results-archive-destination-url: https://artifact-repo.plogios.com/release-engineering-workflow-result-artifacts-archives/
+          results-archive-destination-username: mock-name
+
+          # NOTE: should encrypt this
+          results-archive-destination-password: mock-pass
 
 ** Example Config file for a NPM built Application **
 
@@ -1477,7 +1600,7 @@ From least precedence to highest precedence.
       - implementer: Git
         config: {
           # Optional.
-          #repo-root: &#39;./&#39;
+          #git-repo-root: &#39;./&#39;
 
           # Optional.
           #build-string-length: 7
@@ -1523,9 +1646,24 @@ From least precedence to highest precedence.
         config: {}
 
       unit-test:
-      # WARNING: not yet implemented
-      - implementer: NPM
-        config: {}
+      - implementer: NpmXunitTest
+        config:
+          test-reports-dir: test_results
+
+          # Optional.
+          # npm-envs:
+          #   ENV_VAR1: VALUE1
+          #   ENV_VAR2: VALUE2
+
+          # Optional.
+          #npm-test-script: test
+
+      - implementer: NpmTest
+        config:
+          # Optional.
+          # npm-envs:
+          #   ENV_VAR1: VALUE1
+          #   ENV_VAR2: VALUE2
 
       push-artifacts:
       # WARNING: not yet implemented
@@ -1673,11 +1811,29 @@ From least precedence to highest precedence.
           readiness-probe-path: &#39;&#39;
 
       uat:
-      - implementer: MavenSeleniumCucumber
-        config: {}
+      - implementer: NpmXunitIntegrationTest
+        config:
+          target-host-env-var-name: APP_ROUTE
+          test-reports-dir: uat-reports
 
-      # TODO: not yet implemented
-      report: []
+          # Optional.
+          # npm-test-script: test:uat
+
+          # Optional.
+          # npm-envs:
+          #   WEB_DRIVER_URL: http://selenium-grid.devsecops:4444/wd/hub
+          #   BROWSER: chrome
+          #   USER1: test1
+          #   USER2: test2
+
+      report:
+      - implementer: ResultArtifactsArchive
+        config:
+          results-archive-destination-url: https://artifact-repo.plogios.com/release-engineering-workflow-result-artifacts-archives/
+          results-archive-destination-username: mock-name
+
+          # NOTE: should encrypt this
+          results-archive-destination-password: mock-pass
 
 Examples
 --------
@@ -1695,11 +1851,7 @@ Example Running the &#39;generate-metadata&#39; step
 
 &#34;&#34;&#34;
 
-import __main__
-from ploigos_step_runner.exceptions import StepRunnerException
-from ploigos_step_runner.results import StepResult, WorkflowResult
-from ploigos_step_runner.step_implementer import DefaultSteps, StepImplementer
-from ploigos_step_runner.step_runner import StepRunner</code></pre>
+import __main__</code></pre>
 </details>
 </section>
 <section>
@@ -1723,7 +1875,7 @@ from ploigos_step_runner.step_runner import StepRunner</code></pre>
 </dd>
 <dt><code class="name"><a title="ploigos_step_runner.step_implementer" href="step_implementer.html">ploigos_step_runner.step_implementer</a></code></dt>
 <dd>
-<div class="desc"><p>Abstract class and helper constants for StepImplementer.</p></div>
+<div class="desc"><p>Abstract class and helper constants for StepImplementer …</p></div>
 </dd>
 <dt><code class="name"><a title="ploigos_step_runner.step_implementers" href="step_implementers/index.html">ploigos_step_runner.step_implementers</a></code></dt>
 <dd>
@@ -1782,7 +1934,7 @@ from ploigos_step_runner.step_runner import StepRunner</code></pre>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>

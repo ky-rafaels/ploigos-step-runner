@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.9.2" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>ploigos_step_runner.step_runner API documentation</title>
 <meta name="description" content="Constructs a given named StepImplementer using a given configuration, and runs it." />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
@@ -30,8 +30,9 @@
 <pre><code class="python">&#34;&#34;&#34;Constructs a given named StepImplementer using a given configuration, and runs it.
 &#34;&#34;&#34;
 import os
+import fcntl
 
-from ploigos_step_runner.config.config import Config
+from ploigos_step_runner.config import Config
 from ploigos_step_runner.exceptions import StepRunnerException
 from ploigos_step_runner.results import WorkflowResult
 from ploigos_step_runner.step_implementer import StepImplementer
@@ -174,6 +175,7 @@ class StepRunner:
             f&#34;Can not run step ({step_name}) because no step configuration provided.&#34;
 
         # for each sub step in the step config get the step implementer and run it
+        aggregate_success = True
         for sub_step_config in sub_step_configs:
             sub_step_implementer_name = sub_step_config.sub_step_implementer_name
 
@@ -196,18 +198,39 @@ class StepRunner:
             self.workflow_result.add_step_result(
                 step_result=step_result
             )
-            self.workflow_result.write_to_pickle_file(
-                pickle_filename=self.workflow_result_pickle_file_path
-            )
-            self.workflow_result.write_results_to_yml_file(
-                yml_filename=self.results_file_path
-            )
 
-            # bail out if one of the sub steps fails
-            if not step_result.success:
-                return False
+            # acquire the pickle lock
+            with open(
+                    self.workflow_result_pickle_file_path + &#39;.lock&#39;,
+                    &#39;w&#39;,
+                    encoding=&#39;utf-8&#39;
+            ) as pickle_lock:
+                fcntl.flock(pickle_lock, fcntl.LOCK_EX)
 
-        return True
+                # we are locked
+                try:
+                    self.workflow_result.merge_with_pickle_file(
+                        pickle_filename=self.workflow_result_pickle_file_path
+                    )
+                    self.workflow_result.write_to_pickle_file(
+                        pickle_filename=self.workflow_result_pickle_file_path
+                    )
+                    self.workflow_result.write_results_to_yml_file(
+                        yml_filename=self.results_file_path
+                    )
+                finally:
+                    fcntl.flock(pickle_lock, fcntl.LOCK_UN)
+
+            # aggregate success
+            aggregate_success = (aggregate_success and step_result.success)
+
+            # if this sub step failed and not configured to continue on failure, bail
+            # else execute next sub step and continue aggregating success
+            if (not step_result.success) and \
+                    (not sub_step_config.sub_step_contine_sub_steps_on_failure):
+                break
+
+        return aggregate_success
 
     @staticmethod
     def __get_step_implementer_class(step_name, step_implementer_name):
@@ -447,6 +470,7 @@ False if step returned an error message</dd>
             f&#34;Can not run step ({step_name}) because no step configuration provided.&#34;
 
         # for each sub step in the step config get the step implementer and run it
+        aggregate_success = True
         for sub_step_config in sub_step_configs:
             sub_step_implementer_name = sub_step_config.sub_step_implementer_name
 
@@ -469,18 +493,39 @@ False if step returned an error message</dd>
             self.workflow_result.add_step_result(
                 step_result=step_result
             )
-            self.workflow_result.write_to_pickle_file(
-                pickle_filename=self.workflow_result_pickle_file_path
-            )
-            self.workflow_result.write_results_to_yml_file(
-                yml_filename=self.results_file_path
-            )
 
-            # bail out if one of the sub steps fails
-            if not step_result.success:
-                return False
+            # acquire the pickle lock
+            with open(
+                    self.workflow_result_pickle_file_path + &#39;.lock&#39;,
+                    &#39;w&#39;,
+                    encoding=&#39;utf-8&#39;
+            ) as pickle_lock:
+                fcntl.flock(pickle_lock, fcntl.LOCK_EX)
 
-        return True
+                # we are locked
+                try:
+                    self.workflow_result.merge_with_pickle_file(
+                        pickle_filename=self.workflow_result_pickle_file_path
+                    )
+                    self.workflow_result.write_to_pickle_file(
+                        pickle_filename=self.workflow_result_pickle_file_path
+                    )
+                    self.workflow_result.write_results_to_yml_file(
+                        yml_filename=self.results_file_path
+                    )
+                finally:
+                    fcntl.flock(pickle_lock, fcntl.LOCK_UN)
+
+            # aggregate success
+            aggregate_success = (aggregate_success and step_result.success)
+
+            # if this sub step failed and not configured to continue on failure, bail
+            # else execute next sub step and continue aggregating success
+            if (not step_result.success) and \
+                    (not sub_step_config.sub_step_contine_sub_steps_on_failure):
+                break
+
+        return aggregate_success
 
     @staticmethod
     def __get_step_implementer_class(step_name, step_implementer_name):
@@ -708,6 +753,7 @@ False if step returned an error message</p></div>
         f&#34;Can not run step ({step_name}) because no step configuration provided.&#34;
 
     # for each sub step in the step config get the step implementer and run it
+    aggregate_success = True
     for sub_step_config in sub_step_configs:
         sub_step_implementer_name = sub_step_config.sub_step_implementer_name
 
@@ -730,18 +776,39 @@ False if step returned an error message</p></div>
         self.workflow_result.add_step_result(
             step_result=step_result
         )
-        self.workflow_result.write_to_pickle_file(
-            pickle_filename=self.workflow_result_pickle_file_path
-        )
-        self.workflow_result.write_results_to_yml_file(
-            yml_filename=self.results_file_path
-        )
 
-        # bail out if one of the sub steps fails
-        if not step_result.success:
-            return False
+        # acquire the pickle lock
+        with open(
+                self.workflow_result_pickle_file_path + &#39;.lock&#39;,
+                &#39;w&#39;,
+                encoding=&#39;utf-8&#39;
+        ) as pickle_lock:
+            fcntl.flock(pickle_lock, fcntl.LOCK_EX)
 
-    return True</code></pre>
+            # we are locked
+            try:
+                self.workflow_result.merge_with_pickle_file(
+                    pickle_filename=self.workflow_result_pickle_file_path
+                )
+                self.workflow_result.write_to_pickle_file(
+                    pickle_filename=self.workflow_result_pickle_file_path
+                )
+                self.workflow_result.write_results_to_yml_file(
+                    yml_filename=self.results_file_path
+                )
+            finally:
+                fcntl.flock(pickle_lock, fcntl.LOCK_UN)
+
+        # aggregate success
+        aggregate_success = (aggregate_success and step_result.success)
+
+        # if this sub step failed and not configured to continue on failure, bail
+        # else execute next sub step and continue aggregating success
+        if (not step_result.success) and \
+                (not sub_step_config.sub_step_contine_sub_steps_on_failure):
+            break
+
+    return aggregate_success</code></pre>
 </details>
 </dd>
 </dl>
@@ -778,7 +845,7 @@ False if step returned an error message</p></div>
 </nav>
 </main>
 <footer id="footer">
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.9.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 </body>
 </html>
